@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Censor — local content-shield</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="navbar">
+  <a href="#/" class="brand">
+    <span class="brand-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0a1512" stroke-width="2.2"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/></svg>
+    </span>
+    Censor
+  </a>
+  <div class="nav-links" id="navLinks">
+    <a href="#/" data-route="/">Home</a>
+    <a href="#/docs" data-route="/docs">Docs</a>
+    <a href="#/integration" data-route="/integration">Integration</a>
+  </div>
+  <div class="nav-status" id="navStatus">
+    <span class="status-dot"></span>
+    <span id="navStatusText">not connected</span>
+  </div>
+</nav>
+
+<div class="shell">
+
+  <section class="view" id="view-home" data-view="/">
+
+    <div id="gate" class="panel gate">
+      <div class="pairing">
+        <div class="pair-node linked" id="nodeBrowser">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </div>
+        <div class="pair-link" id="pairLink"></div>
+        <div class="pair-node" id="nodeSandbox">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>
+        </div>
+      </div>
+
+      <div class="eyebrow" style="justify-content:center">local-only processing</div>
+      <h2 id="gateTitle">Pair with your sandbox</h2>
+      <p class="gate-sub" id="gateSub">
+        Nothing gets analyzed on a server we run. Detection happens on your own machine —
+        download the launcher, start the sandbox, and paste the connection code it prints
+        below to pair this tab with it.
+      </p>
+
+      <form class="connect-form" id="connectForm">
+        <input type="text" id="connectInput" placeholder="paste connection code or full URL — e.g. 8f2a-91cd or https://…" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="btn btn-accent" id="connectBtn">Pair</button>
+      </form>
+      <div class="gate-error" id="gateError"></div>
+      <p class="gate-hint" id="gateHint">
+        Don't have the launcher yet? <a href="#/integration">Get the sandbox script →</a>
+      </p>
+    </div>
+
+    <div id="app" style="display:none">
+      <div class="eyebrow">sandbox paired · <span id="connectedTo" style="color:var(--muted)"></span></div>
+      <h1 class="page-title">Analyze &amp; censor</h1>
+      <p class="page-sub">Drop an image for instant region detection, or queue mp4s — each video processes independently on your sandbox.</p>
+
+      <div class="app-grid">
+
+        <div style="display:flex; flex-direction:column; gap:18px;">
+
+          <div class="panel">
+            <div class="panel-body">
+              <label id="dropZone" class="dropzone">
+                <input type="file" id="fileInput" accept="image/*,video/mp4" multiple class="hidden" style="display:none" />
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+                <div class="dz-label" id="dropLabel">Choose or drag image(s) or mp4(s)</div>
+                <div class="dz-sub">Multiple mp4s process concurrently on the sandbox</div>
+              </label>
+              <button id="analyzeBtn" class="btn btn-accent btn-block" style="margin-top:14px" disabled>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+                <span id="analyzeLabel">Analyze &amp; censor</span>
+              </button>
+              <button id="resetBtn" class="btn btn-ghost btn-block" style="margin-top:8px">Reset</button>
+              <div class="status-line" id="statusMsg"></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">Censor options</div>
+            <div class="panel-body" style="display:flex; flex-direction:column; gap:16px;">
+              <div>
+                <div class="field-label">Style</div>
+                <div class="opt-row">
+                  <label class="chip"><input type="radio" name="style" value="blur" checked /> Blur</label>
+                  <label class="chip"><input type="radio" name="style" value="box" /> Black box</label>
+                </div>
+              </div>
+              <div>
+                <div class="field-label">Regions</div>
+                <div class="opt-row" style="flex-direction:column; gap:10px;">
+                  <label class="chip"><input type="checkbox" id="censorGenitals" checked /> Genitalia / anus</label>
+                  <label class="chip"><input type="checkbox" id="censorBreasts" checked /> Breasts</label>
+                  <label class="chip"><input type="checkbox" id="censorButtocks" /> Buttocks</label>
+                  <label class="chip"><input type="checkbox" id="censorFeet" /> Feet</label>
+                  <label class="chip"><input type="checkbox" id="censorFace" /> Face</label>
+                  <label class="chip"><input type="checkbox" id="censorBelly" /> Belly</label>
+                  <label class="chip"><input type="checkbox" id="censorArmpits" /> Armpits</label>
+                </div>
+              </div>
+
+              <div id="samplingWrap" style="display:none; border-top:1px solid var(--border); padding-top:14px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                  <span class="field-label" style="margin:0">Detection sample rate</span>
+                  <span id="sampleValueLabel" style="font-family:var(--font-mono); font-size:11px; color:var(--accent)">every 5 frames</span>
+                </div>
+                <input type="range" id="sampleEvery" min="1" max="30" value="5" style="width:100%; accent-color:var(--accent)">
+              </div>
+
+              <label class="chip" id="showAllWrap" style="border-top:1px solid var(--border); padding-top:14px;">
+                <input type="checkbox" id="showAllToggle" /> Show all detected boxes (debug)
+              </label>
+            </div>
+          </div>
+
+          <div class="panel" id="logCard">
+            <div class="panel-head">Detection coordinates <span class="muted-tag" id="logCount"></span></div>
+            <div class="panel-body" style="max-height:320px; overflow-y:auto;">
+              <div id="logEmpty" style="text-align:center; color:var(--muted-2); font-size:13px; padding:30px 0;">
+                No regions detected yet. Upload an image and run analysis.
+              </div>
+              <div id="logList" style="display:none"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel preview-panel" id="previewPanel">
+          <button id="focusBackBtn" class="btn btn-ghost" style="display:none; position:absolute; top:14px; left:14px; z-index:10;">← Back</button>
+          <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px; z-index:10;">
+            <button id="focusBtn" class="btn btn-ghost" title="Expand in-page" style="padding:9px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+            </button>
+            <button id="fullscreenBtn" class="btn btn-ghost" title="Fullscreen" style="padding:9px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8V5a2 2 0 0 1 2-2h3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M21 16v3a2 2 0 0 1-2 2h-3"/></svg>
+            </button>
+          </div>
+
+          <div class="preview-empty" id="canvasPlaceholder">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+            Upload an image or mp4 to see the preview here
+          </div>
+          <div style="display:none" id="canvasWrap"><canvas id="canvas"></canvas></div>
+          <div style="display:none; flex-direction:column; align-items:center; gap:10px; width:100%;" id="videoWrap">
+            <div id="previewVideoLabel" style="font-size:13px; font-weight:600; color:var(--muted)"></div>
+            <video id="previewVideo" controls style="width:100%; max-height:75vh; border-radius:10px; background:#000;"></video>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="videoQueuePanel" style="display:none; margin-top:22px;">
+        <div class="panel-head">Video queue <span class="muted-tag">sandbox caps GPU work — extras queue automatically</span></div>
+        <div class="panel-body" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;" id="videoQueueList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-docs" data-view="/docs">
+    <div class="eyebrow">reference</div>
+    <h1 class="page-title">Docs</h1>
+    <p class="page-sub">How pairing works, what gets detected, and every option in the UI.</p>
+
+    <div class="docs-grid">
+      <div class="docs-nav">
+        <a href="#doc-model">Detection model</a>
+        <a href="#doc-pairing">Pairing &amp; codes</a>
+        <a href="#doc-images">Images</a>
+        <a href="#doc-video">Video queue</a>
+        <a href="#doc-privacy">Privacy model</a>
+      </div>
+      <div>
+        <div class="doc-section" id="doc-model">
+          <h3>What the detector sees</h3>
+          <p>The sandbox runs NudeNet, an object detector that returns bounding boxes for specific
+            body regions — not a single whole-image score. That's what lets the UI censor only the
+            regions you've selected instead of blacking out the whole frame.</p>
+          <div class="callout">NudeNet only has classes for human body regions (genitalia, breasts,
+            buttocks, feet, face, belly, armpits). There are no classes for anything else, so there's
+            nothing for the app to detect outside that list.</div>
+        </div>
+        <div class="doc-section" id="doc-pairing">
+          <h3>Pairing &amp; connection codes</h3>
+          <p>The launcher script starts a detector process on your machine, then opens a tunnel so this
+            page can reach it, and prints a short code. Entering that code (or the full URL it also
+            prints) on the Home tab is the only way this site ever learns where your sandbox lives —
+            nothing is registered or stored anywhere else.</p>
+          <p>Codes are single-session: closing the launcher, or restarting it, invalidates the old one.
+            The address bar can also carry a code directly, as
+            <code style="font-family:var(--font-mono); color:var(--accent)">/u/&lt;code&gt;</code> — useful
+            for re-opening a tab without retyping it, not for sharing your sandbox with anyone else.</p>
+        </div>
+        <div class="doc-section" id="doc-images">
+          <h3>Images</h3>
+          <p>Upload one image at a time. It's sent to your sandbox once, boxes come back, and everything
+            after that — blur radius, box vs. blur, which regions are active — is redrawn instantly in
+            the browser with no further round trip.</p>
+        </div>
+        <div class="doc-section" id="doc-video">
+          <h3>Video queue</h3>
+          <p>Each mp4 becomes its own job with its own progress bar and runs independently, so queuing a
+            second video doesn't block the first. The sandbox samples every N frames (you're asked per
+            video), runs detection only on those, and interpolates boxes for the frames in between so the
+            censor doesn't flicker. The sandbox caps how many videos run detection at once — extras wait
+            their turn automatically, decoding and encoding still happen in parallel.</p>
+        </div>
+        <div class="doc-section" id="doc-privacy">
+          <h3>Privacy model</h3>
+          <p>Detection and censoring both happen on your machine. This page only ever talks to the address
+            behind your connection code — it has no separate backend of its own and keeps no copy of
+            anything you upload.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="view-integration" data-view="/integration">
+    <div class="eyebrow">setup</div>
+    <h1 class="page-title">Integration</h1>
+    <p class="page-sub">Get the sandbox running locally, then pair this tab with it.</p>
+
+    <ol class="step-list">
+      <li><strong>Install the launcher.</strong> Requires Python 3.9+ and ffmpeg on your PATH.
+        <pre class="code-block" style="margin-top:10px"><span class="c-muted"># from the toolkit folder</span>
+pip install -r requirements.txt</pre>
+      </li>
+      <li><strong>Start the sandbox.</strong> This boots the local detector and opens a tunnel to it.
+        <pre class="code-block" style="margin-top:10px">python connect_launcher.py</pre>
+      </li>
+      <li><strong>Confirm the prompt.</strong> The launcher shows a HUD and asks before it starts
+        anything or exposes a tunnel — nothing runs silently.
+        <pre class="code-block" style="margin-top:10px"><span class="c-accent">Start local sandbox?</span> [Y/n] y
+<span class="c-muted">[■■■■■■■■■□□] booting detector… 82%</span></pre>
+      </li>
+      <li><strong>Copy the code it prints.</strong>
+        <pre class="code-block" style="margin-top:10px"><span class="c-muted">sandbox ready. pair this tab with:</span>
+<span class="c-accent">https://itsmarwan.github.io/censor/u/8f2a91cd</span>
+<span class="c-muted">or just the code:</span> <span class="c-accent">8f2a91cd</span></pre>
+      </li>
+      <li><strong>Paste it into the Home tab</strong> and click Pair. The UI unlocks once the
+        connection is confirmed.</li>
+    </ol>
+
+    <div class="callout warn" style="margin-top:8px">
+      <strong>About the masked URL:</strong> the <code style="font-family:var(--font-mono)">/u/&lt;code&gt;</code>
+      link is a cosmetic address for this static site — it decodes to your sandbox's real tunnel
+      address entirely in your own browser. It isn't a hidden relay server run by us; nobody but you
+      and whoever you hand the code to can use it, and the tunnel only lives as long as the launcher
+      is running.
+    </div>
+
+    <div class="doc-section" style="margin-top:44px">
+      <h3>Files in the toolkit</h3>
+      <p><code style="font-family:var(--font-mono); color:var(--accent)">app.py</code> — the Flask
+        detector (NudeNet), unchanged detection logic, image + video endpoints.</p>
+      <p><code style="font-family:var(--font-mono); color:var(--accent)">connect_launcher.py</code> —
+        the HUD script: starts <code style="font-family:var(--font-mono)">app.py</code>, opens the
+        tunnel, prints your pairing code.</p>
+      <p><code style="font-family:var(--font-mono); color:var(--accent)">requirements.txt</code> —
+        everything <code style="font-family:var(--font-mono)">pip install -r</code> needs.</p>
+    </div>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

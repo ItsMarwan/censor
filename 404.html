@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Redirecting…</title>
+<script>
+  var path = location.pathname + location.search + location.hash;
+  location.replace('/censor/index.html?redirect=' + encodeURIComponent(path));
+</script>
+</head>
+<body></body>
+</html>
