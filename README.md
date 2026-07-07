@@ -1,12 +1,6 @@
 # Censor toolkit
 
 Two pieces:
-
-- **`site/`** — static frontend (deploy as-is to GitHub Pages, e.g. as the
-  `itsmarwan.github.io/censor` repo). Has a navbar (Home / Docs /
-  Integration) and never contains a hardcoded server address — it's locked
-  behind a "pair with your sandbox" gate until you give it a connection
-  code from the launcher.
 - **`backend/`** — `app.py` (the NudeNet detector, same detection logic as
   before) plus `connect_launcher.py`, the script people run locally. It
   shows a small terminal HUD, asks for confirmation, boots the detector,
