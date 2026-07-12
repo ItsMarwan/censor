@@ -18,15 +18,15 @@ function applyConnectMode() {
 
   if (appConfig.local) {
     title.textContent = "Connect to your local sandbox";
-    sub.textContent = "Detection happens on this machine. Start the launcher, then enter the address it's running on below — usually the default already works.";
+    sub.textContent = "Detection happens on this machine. Start the app, then enter the address it's running on below — usually the default already works.";
     input.placeholder = appConfig.local_default_host || "127.0.0.1:5000";
     if (!input.value) input.value = appConfig.local_default_host || "127.0.0.1:5000";
-    hint.innerHTML = 'Launcher not running yet? <a href="#/integration">See setup →</a>';
+    hint.innerHTML = 'App not running yet? <a href="#/integration">See setup →</a>';
   } else {
-    title.textContent = "Pair with your sandbox";
-    sub.textContent = "Nothing gets analyzed on a server we run. Detection happens on your own machine — download the launcher, start the sandbox, and paste the connection code it prints below to pair this tab with it.";
+    title.textContent = "Pair this tab";
+    sub.textContent = "Nothing gets analyzed on a server we run. Detection happens on your own machine — download the app, click Start, and paste the connection code it shows below.";
     input.placeholder = "paste connection code or full URL — e.g. 8f2a-91cd or https://…";
-    hint.innerHTML = "Don't have the launcher yet? " + '<a href="#/integration">Get the sandbox script →</a>';
+    hint.textContent = "Don't have the app yet? Grab it in step 1.";
   }
 }
 
@@ -70,6 +70,20 @@ function render() {
 window.addEventListener("hashchange", render);
 window.addEventListener("popstate", render);
 
+function setupDocsNav() {
+  const links = document.querySelectorAll("#docsNav a[data-target]");
+  links.forEach(a => {
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      const target = document.getElementById(a.dataset.target);
+      if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      links.forEach(x => x.classList.remove("active"));
+      a.classList.add("active");
+    });
+  });
+}
+setupDocsNav();
+
 const connection = { base: null };
 const NGROK_HEADER = { "ngrok-skip-browser-warning": "true" };
 
@@ -110,7 +124,7 @@ async function attemptConnect(raw, opts = {}) {
   const target = decodeConnectionInput(raw);
   gateError.textContent = "";
   if (!target) {
-    gateError.textContent = "That doesn't look like a valid code or URL — copy it fresh from the launcher.";
+    gateError.textContent = "That doesn't look like a valid code or URL — copy it fresh from the app.";
     return;
   }
 
@@ -131,7 +145,7 @@ async function attemptConnect(raw, opts = {}) {
   } catch (err) {
     pairLink.classList.remove("connecting");
     nodeSandbox.classList.remove("pulsing");
-    gateError.textContent = "Couldn't reach that sandbox (" + err.message + "). Is connect_launcher.py still running?";
+    gateError.textContent = "Couldn't reach that sandbox (" + err.message + "). Is the app still running?";
   } finally {
     connectBtn.disabled = false;
     connectBtn.textContent = "Pair";
@@ -167,6 +181,32 @@ function shortenUrl(url) {
   if (last) document.getElementById("connectInput").value = last;
 })();
 
+
+const DOWNLOAD_URL = "downloads/CensorSandbox-Setup.exe";
+const downloadAppBtn = document.getElementById("downloadAppBtn");
+const downloadIdle = document.getElementById("downloadIdle");
+const downloadPreparing = document.getElementById("downloadPreparing");
+const downloadDone = document.getElementById("downloadDone");
+const walkthroughPanel = document.getElementById("walkthroughPanel");
+
+function trackEvent(name, data) {
+  try { console.debug("[censor:track]", name, data || {}); } catch (e) { /* noop */ }
+}
+
+if (downloadAppBtn) {
+  downloadAppBtn.addEventListener("click", () => {
+    trackEvent("download_click", { url: downloadAppBtn.getAttribute("href") });
+    downloadIdle.style.display = "none";
+    downloadPreparing.style.display = "block";
+    setTimeout(() => {
+      downloadPreparing.style.display = "none";
+      downloadDone.style.display = "block";
+      walkthroughPanel.style.display = "block";
+      walkthroughPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 900);
+  });
+}
+
 const GENITAL_ANUS_CLASSES = ["FEMALE_GENITALIA_EXPOSED", "MALE_GENITALIA_EXPOSED", "ANUS_EXPOSED"];
 const BREAST_CLASSES = ["FEMALE_BREAST_EXPOSED", "MALE_BREAST_EXPOSED"];
 const BUTTOCKS_CLASSES = ["BUTTOCKS_EXPOSED"];
@@ -195,6 +235,7 @@ const logList     = document.getElementById("logList");
 const logCount    = document.getElementById("logCount");
 const showAllToggle  = document.getElementById("showAllToggle");
 const showAllWrap = document.getElementById("showAllWrap");
+const preBlurToggle = document.getElementById("preBlurToggle");
 const censorGenitals = document.getElementById("censorGenitals");
 const censorBreasts  = document.getElementById("censorBreasts");
 const censorButtocks = document.getElementById("censorButtocks");
@@ -203,12 +244,17 @@ const censorFace = document.getElementById("censorFace");
 const censorBelly = document.getElementById("censorBelly");
 const censorArmpits = document.getElementById("censorArmpits");
 const styleRadios = document.querySelectorAll('input[name="style"]');
+const solidColorWrap = document.getElementById("solidColorWrap");
+const solidColorInput = document.getElementById("solidColorInput");
+const solidSwatchPreview = document.getElementById("solidSwatchPreview");
 const samplingWrap = document.getElementById("samplingWrap");
 const sampleEvery  = document.getElementById("sampleEvery");
 const sampleValueLabel = document.getElementById("sampleValueLabel");
 const videoWrap = document.getElementById("videoWrap");
 const previewVideo = document.getElementById("previewVideo");
 const previewVideoLabel = document.getElementById("previewVideoLabel");
+const downloadResultBtn = document.getElementById("downloadResultBtn");
+const copyResultBtn = document.getElementById("copyResultBtn");
 
 let currentImage = null;
 let currentFile = null;
@@ -246,6 +292,71 @@ function showImageUI() {
 }
 const logCard = document.getElementById("logCard");
 
+const frameModalOverlay = document.getElementById("frameModalOverlay");
+const frameModalFileName = document.getElementById("frameModalFileName");
+const frameModalInput = document.getElementById("frameModalInput");
+const frameStepDown = document.getElementById("frameStepDown");
+const frameStepUp = document.getElementById("frameStepUp");
+const frameModalPresets = document.getElementById("frameModalPresets");
+const frameModalCancel = document.getElementById("frameModalCancel");
+const frameModalConfirm = document.getElementById("frameModalConfirm");
+
+function markActivePreset(val) {
+  frameModalPresets.querySelectorAll(".preset-chip").forEach(chip => {
+    chip.classList.toggle("active", Number(chip.dataset.val) === Number(val));
+  });
+}
+
+function askFrameRate(fileName, defaultVal) {
+  return new Promise((resolve) => {
+    frameModalFileName.textContent = `Run detection every how many frames for "${fileName}"?`;
+    frameModalInput.value = defaultVal;
+    markActivePreset(defaultVal);
+    frameModalOverlay.style.display = "flex";
+    frameModalInput.focus();
+    frameModalInput.select();
+
+    function cleanup() {
+      frameModalOverlay.style.display = "none";
+      frameModalOverlay.removeEventListener("click", onOverlayClick);
+      frameModalConfirm.removeEventListener("click", onConfirm);
+      frameModalCancel.removeEventListener("click", onCancel);
+      frameStepUp.removeEventListener("click", onStepUp);
+      frameStepDown.removeEventListener("click", onStepDown);
+      frameModalPresets.removeEventListener("click", onPresetClick);
+      frameModalInput.removeEventListener("keydown", onKeydown);
+      document.removeEventListener("keydown", onEscape);
+    }
+    function currentValue() {
+      const parsed = parseInt(frameModalInput.value, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultVal;
+    }
+    function onConfirm() { const v = currentValue(); cleanup(); resolve(v); }
+    function onCancel() { cleanup(); resolve(null); }
+    function onOverlayClick(e) { if (e.target === frameModalOverlay) onCancel(); }
+    function onStepUp() { frameModalInput.value = currentValue() + 1; markActivePreset(-1); }
+    function onStepDown() { frameModalInput.value = Math.max(1, currentValue() - 1); markActivePreset(-1); }
+    function onPresetClick(e) {
+      const chip = e.target.closest(".preset-chip");
+      if (!chip) return;
+      frameModalInput.value = chip.dataset.val;
+      markActivePreset(chip.dataset.val);
+    }
+    function onKeydown(e) { if (e.key === "Enter") onConfirm(); }
+    function onEscape(e) { if (e.key === "Escape") onCancel(); }
+
+    frameModalOverlay.addEventListener("click", onOverlayClick);
+    frameModalConfirm.addEventListener("click", onConfirm);
+    frameModalCancel.addEventListener("click", onCancel);
+    frameStepUp.addEventListener("click", onStepUp);
+    frameStepDown.addEventListener("click", onStepDown);
+    frameModalPresets.addEventListener("click", onPresetClick);
+    frameModalInput.addEventListener("keydown", onKeydown);
+    document.addEventListener("keydown", onEscape);
+    frameModalInput.addEventListener("input", () => markActivePreset(-1));
+  });
+}
+
 function loadFiles(files) {
   const videoFiles = files.filter(f => f.type && f.type.startsWith("video/"));
   const imageFiles = files.filter(f => !f.type || f.type.startsWith("image/"));
@@ -270,10 +381,17 @@ function loadImageFile(file) {
   const img = new Image();
   img.onload = () => {
     currentImage = img;
+    lastResult = null;
     showImageUI();
-    drawImageOnly(img);
+    applyPreBlurState();
     setAnalyzeEnabled(true);
-    setStatus(`Loaded ${file.name} (${img.width}×${img.height}).`, "info");
+    setResultActionsEnabled(false);
+    setStatus(
+      preBlurToggle.checked
+        ? `Loaded ${file.name} (${img.width}×${img.height}) — blurred until scanned. Click "Analyze & censor" when ready.`
+        : `Loaded ${file.name} (${img.width}×${img.height}).`,
+      "info"
+    );
     clearLog();
   };
   img.onerror = () => setStatus("Could not read that file as an image.", "error");
@@ -288,6 +406,20 @@ function drawImageOnly(img) {
   canvasWrap.style.display = "block";
 }
 
+function applyPreBlurState() {
+  drawImageOnly(currentImage);
+  if (preBlurToggle.checked) {
+    ctx.save();
+    ctx.filter = "blur(26px)";
+    ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+}
+
+preBlurToggle.addEventListener("change", () => {
+  if (currentImage && mode === "image" && !lastResult) applyPreBlurState();
+});
+
 function setStatus(msg, cls) {
   statusMsg.textContent = msg;
   statusMsg.className = "status-line " + (cls || "");
@@ -295,6 +427,11 @@ function setStatus(msg, cls) {
 
 function setAnalyzeEnabled(enabled) {
   analyzeBtn.disabled = !enabled;
+}
+
+function setResultActionsEnabled(enabled) {
+  downloadResultBtn.disabled = !enabled;
+  copyResultBtn.disabled = !enabled;
 }
 
 function setAnalyzing(isAnalyzing, label) {
@@ -309,17 +446,42 @@ function setAnalyzing(isAnalyzing, label) {
 
 analyzeBtn.addEventListener("click", async () => { if (currentFile) await analyzeImage(); });
 
+const MAX_DETECT_DIM = 1600;
+
+function prepareDetectUpload(img, file) {
+  return new Promise((resolve) => {
+    const maxSide = Math.max(img.width, img.height);
+    if (maxSide <= MAX_DETECT_DIM) {
+      resolve({ blob: file, scale: 1 });
+      return;
+    }
+    const factor = MAX_DETECT_DIM / maxSide;
+    const w = Math.max(1, Math.round(img.width * factor));
+    const h = Math.max(1, Math.round(img.height * factor));
+    const off = document.createElement("canvas");
+    off.width = w; off.height = h;
+    off.getContext("2d").drawImage(img, 0, 0, w, h);
+    off.toBlob((blob) => {
+      if (!blob) { resolve({ blob: file, scale: 1 }); return; }
+      resolve({ blob, scale: maxSide / Math.max(w, h) });
+    }, "image/jpeg", 0.87);
+  });
+}
+
 async function analyzeImage() {
   setStatus("Analyzing…", "info");
   setAnalyzing(true, "Scanning image…");
-  const formData = new FormData();
-  formData.append("image", currentFile);
   try {
+    const { blob, scale } = await prepareDetectUpload(currentImage, currentFile);
+    const formData = new FormData();
+    formData.append("image", blob, currentFile.name || "photo.jpg");
     const res = await fetch(apiUrl("/detect"), { method: "POST", body: formData, headers: NGROK_HEADER });
     if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `Server returned ${res.status}`); }
     const data = await res.json();
+    if (scale !== 1) data.all_detections.forEach(d => { d.box = d.box.map(v => v * scale); });
     lastResult = data;
     renderResult(data);
+    setResultActionsEnabled(true);
   } catch (err) {
     setStatus("Error: " + err.message + " — is your sandbox still paired?", "error");
   } finally {
@@ -339,18 +501,15 @@ const STATUS_LABELS = {
 
 let jobCounter = 0;
 
-function addVideoJob(file) {
+async function addVideoJob(file) {
   const localId = "job" + (++jobCounter);
   const style = document.querySelector('input[name="style"]:checked').value;
+  const solidColor = solidColorInput.value;
   const defaultSample = sampleEvery.value;
 
-  const answer = window.prompt(
-    `Run detection every how many frames for "${file.name}"?\n(1 = every frame — most accurate, slowest. Higher = faster, interpolates between samples.)`,
-    defaultSample
-  );
+  const answer = await askFrameRate(file.name, defaultSample);
   if (answer === null) { setStatus(`Skipped "${file.name}" — cancelled.`, "info"); return; }
-  const parsed = parseInt(answer, 10);
-  const sampleEveryVal = Number.isFinite(parsed) && parsed > 0 ? parsed : defaultSample;
+  const sampleEveryVal = answer;
   const categories = collectCategories().join(",");
 
   videoQueuePanel.style.display = "block";
@@ -381,7 +540,7 @@ function addVideoJob(file) {
     errorMsg: card.querySelector('[data-role="errorMsg"]'),
   };
 
-  runVideoJob(file, style, sampleEveryVal, categories, els, localId, card);
+  runVideoJob(file, style, sampleEveryVal, categories, els, localId, card, solidColor);
 }
 
 function collectCategories() {
@@ -403,12 +562,13 @@ function updateJobProgressUI(els, status, current, total) {
   else { els.count.textContent = ""; els.bar.style.width = "0%"; }
 }
 
-async function runVideoJob(file, style, sampleEveryVal, categories, els, localId, cardEl) {
+async function runVideoJob(file, style, sampleEveryVal, categories, els, localId, cardEl, solidColor) {
   const formData = new FormData();
   formData.append("video", file);
   formData.append("sample_every", sampleEveryVal);
   formData.append("style", style);
   formData.append("categories", categories);
+  formData.append("solid_color", solidColor || "#000000");
 
   try {
     const startRes = await fetch(apiUrl("/start_video_job"), { method: "POST", body: formData, headers: NGROK_HEADER });
@@ -452,6 +612,7 @@ function selectVideoJob(job) {
   canvasPlaceholder.style.display = "none";
   showAllWrap.style.display = "none";
   logCard.style.display = "none";
+  setResultActionsEnabled(false);
   videoWrap.style.display = "flex";
   previewVideoLabel.textContent = job.name;
   if (previewVideo.dataset.currentUrl !== job.url) {
@@ -474,13 +635,25 @@ function activeClasses() {
   return classes;
 }
 
+function currentStyle() { return document.querySelector('input[name="style"]:checked').value; }
+
+function applyStyleToRegion(style, box) {
+  switch (style) {
+    case "pixelate": pixelateRegion(box); break;
+    case "frosted": frostedRegion(box); break;
+    case "box": blackBoxRegion(box); break;
+    case "solid": solidFillRegion(box, solidColorInput.value); break;
+    default: blurRegion(box);
+  }
+}
+
 function renderResult(data) {
   drawImageOnly(currentImage);
   const wanted = activeClasses();
   const boxesToCensor = data.all_detections.filter(d => wanted.includes(d.class));
-  const style = document.querySelector('input[name="style"]:checked').value;
+  const style = currentStyle();
 
-  boxesToCensor.forEach(det => style === "blur" ? blurRegion(det.box) : blackBoxRegion(det.box));
+  boxesToCensor.forEach(det => applyStyleToRegion(style, det.box));
   if (showAllToggle.checked) data.all_detections.forEach(det => drawBoxOutline(det.box, det.class, boxesToCensor.includes(det)));
 
   setStatus(boxesToCensor.length === 0 ? "No selected regions detected — nothing to censor." : `Detected & censored ${boxesToCensor.length} region(s).`, "ok");
@@ -495,6 +668,8 @@ function clampBox([x, y, w, h]) {
 
 function blackBoxRegion(box) { const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, h); }
 
+function solidFillRegion(box, color) { const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return; ctx.fillStyle = color || "#000000"; ctx.fillRect(x, y, w, h); }
+
 function blurRegion(box, radius = 18) {
   const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
   const pad = radius * 2;
@@ -506,6 +681,29 @@ function blurRegion(box, radius = 18) {
   offCtx.filter = `blur(${radius}px)`;
   offCtx.drawImage(currentImage, sx, sy, sw, sh, 0, 0, sw, sh);
   ctx.drawImage(off, x - sx, y - sy, w, h, x, y, w, h);
+}
+
+function pixelateRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  const blockSize = Math.max(6, Math.round(Math.min(w, h) / 9));
+  const smallW = Math.max(1, Math.round(w / blockSize));
+  const smallH = Math.max(1, Math.round(h / blockSize));
+  const off = document.createElement("canvas");
+  off.width = smallW; off.height = smallH;
+  off.getContext("2d").drawImage(currentImage, x, y, w, h, 0, 0, smallW, smallH);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(off, 0, 0, smallW, smallH, x, y, w, h);
+  ctx.restore();
+}
+
+function frostedRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  blurRegion(box, 32);
+  ctx.save();
+  ctx.fillStyle = "rgba(233, 236, 242, 0.32)";
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
 }
 
 function drawBoxOutline([x, y, w, h], label, censored) {
@@ -551,9 +749,48 @@ function populateLog(data, boxesToCensor) {
   });
 }
 
+function updateSolidColorVisibility() {
+  solidColorWrap.style.display = currentStyle() === "solid" ? "flex" : "none";
+}
+
 showAllToggle.addEventListener("change", () => { if (lastResult && mode === "image") renderResult(lastResult); });
 [censorGenitals, censorBreasts, censorButtocks, censorFeet, censorFace, censorBelly, censorArmpits].forEach(cb => cb.addEventListener("change", () => { if (lastResult && mode === "image") renderResult(lastResult); }));
-styleRadios.forEach(r => r.addEventListener("change", () => { if (lastResult && mode === "image") renderResult(lastResult); }));
+styleRadios.forEach(r => r.addEventListener("change", () => {
+  updateSolidColorVisibility();
+  if (lastResult && mode === "image") renderResult(lastResult);
+}));
+solidColorInput.addEventListener("input", () => {
+  solidSwatchPreview.style.background = solidColorInput.value;
+  if (lastResult && mode === "image" && currentStyle() === "solid") renderResult(lastResult);
+});
+updateSolidColorVisibility();
+solidSwatchPreview.style.background = solidColorInput.value;
+
+downloadResultBtn.addEventListener("click", () => {
+  if (!lastResult) return;
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const base = (currentFile && currentFile.name ? currentFile.name.replace(/\.[^.]+$/, "") : "censored");
+    const a = document.createElement("a");
+    a.href = url; a.download = `${base}-censored.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  }, "image/png");
+});
+
+copyResultBtn.addEventListener("click", () => {
+  if (!lastResult) return;
+  canvas.toBlob(async (blob) => {
+    if (!blob) return;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      setStatus("Copied the censored image to your clipboard.", "ok");
+    } catch (e) {
+      setStatus("Couldn't copy automatically in this browser — use the download button instead.", "error");
+    }
+  }, "image/png");
+});
 
 const previewPanel = document.getElementById("previewPanel");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
@@ -593,6 +830,7 @@ resetBtn.addEventListener("click", () => {
   showAllWrap.style.display = "flex";
   logCard.style.display = "block";
   setAnalyzeEnabled(false);
+  setResultActionsEnabled(false);
   setStatus("", "");
   clearLog();
 });

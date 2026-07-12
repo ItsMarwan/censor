@@ -5,3 +5,7 @@ numpy
 nudenet
 onnxruntime-gpu
 pyngrok
+
+# --- dev-only, not needed to run connect_launcher.py ---
+# pillow        # only for make_icon.py (regenerating assets/icon.ico)
+# pyinstaller   # only for packaging connect_launcher.py into the .exe

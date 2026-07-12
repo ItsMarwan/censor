@@ -1,0 +1,17 @@
+{
+  "name": "Censor — local content-shield",
+  "short_name": "Censor",
+  "description": "Detect and blur explicit regions in photos and video, entirely on your own machine.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#10131a",
+  "theme_color": "#10131a",
+  "icons": [
+    {
+      "src": "assets/brand-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

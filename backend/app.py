@@ -24,8 +24,10 @@ video processing (NudeNet uses onnxruntime under the hood).
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -69,7 +71,143 @@ def handle_any_error(e):
 # installed and a CUDA-capable GPU + drivers are present. NudeDetector doesn't
 # expose a provider kwarg in older versions, so we just rely on the onnxruntime
 # wheel installed (see requirements.txt: onnxruntime-gpu, not onnxruntime).
-detector = NudeDetector()
+#
+# NudeDetector(), left to its own defaults, looks for its .onnx weights next
+# to nudenet's own nudenet.py (os.path.dirname(__file__)/320n.onnx). That
+# works fine with a normal `pip install`, but breaks for someone who only
+# downloaded the packaged .exe and not the Python library: a PyInstaller
+# build only auto-bundles Python modules, not sibling data files, so unless
+# --add-data explicitly included it (see README > Packaging), the model
+# simply isn't there. That's also just as true if a build was ever shipped
+# without it by mistake — this needs to be a runtime-recoverable situation,
+# not just a packaging instruction people have to get right.
+#
+# So: model lookup is separate from detector construction. connect_launcher.py
+# checks find_local_model_path() before starting the server; if it's missing,
+# it asks the user whether to download it, calls download_model() with a
+# progress callback if they say yes, then calls init_detector(). Running
+# app.py directly (python app.py) does the same thing non-interactively at
+# the bottom of this file.
+
+MODEL_FILENAME = "320n.onnx"
+# Same file NudeNet's own PyPI wheel ships (notAI-tech/NudeNet, v3 branch) —
+# pinned to a specific ref (not a moving branch pointer at request time) plus
+# a checksum, so a downloaded file is verified byte-for-byte before use.
+MODEL_URL = "https://raw.githubusercontent.com/notAI-tech/NudeNet/v3/nudenet/320n.onnx"
+MODEL_SHA256 = "c15d8273adad2d0a92f014cc69ab2d6c311a06777a55545f2c4eb46f51911f0f"
+
+
+def user_model_cache_dir():
+    """A persistent (non-temp) per-user folder to download the model into,
+    so a onefile .exe — which re-extracts to a fresh, wiped _MEI#### temp
+    folder on *every* launch — only needs to download it once, not once per
+    run."""
+    if sys.platform == "win32":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share")
+    return Path(base) / "CensorSandbox" / "models"
+
+
+def find_local_model_path():
+    """Look everywhere the model plausibly is. Returns a path string, or
+    None if it isn't anywhere — never raises, so callers can decide what to
+    do about a missing model (prompt to download, fail loudly, etc.)."""
+    import nudenet as _nudenet_pkg
+
+    candidates = []
+    if getattr(sys, "frozen", False):
+        # PyInstaller onefile: files added via `--add-data src;nudenet`
+        # land at sys._MEIPASS/nudenet/<file> after extraction.
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass) / "nudenet" / MODEL_FILENAME)
+        # Onedir builds (or a manually copied folder) may instead sit right
+        # next to the executable.
+        candidates.append(Path(sys.executable).parent / "nudenet" / MODEL_FILENAME)
+        candidates.append(Path(sys.executable).parent / "_internal" / "nudenet" / MODEL_FILENAME)
+    # Running from source, or a frozen build where --add-data happened to
+    # bundle it back at the package's normal relative spot.
+    candidates.append(Path(os.path.dirname(_nudenet_pkg.__file__)) / MODEL_FILENAME)
+    # Previously auto-downloaded by this same app.
+    candidates.append(user_model_cache_dir() / MODEL_FILENAME)
+
+    for path in candidates:
+        if path.is_file():
+            return str(path)
+    return None
+
+
+class ModelDownloadError(Exception):
+    pass
+
+
+def download_model(progress_cb=None, cancel_event=None):
+    """Downloads MODEL_URL to user_model_cache_dir(), verifying its sha256
+    against MODEL_SHA256 before it's considered valid. progress_cb, if given,
+    is called with a float 0..1 as bytes arrive. Returns the final path.
+    Raises ModelDownloadError on any network failure or checksum mismatch —
+    never leaves a corrupt/partial file at the final destination."""
+    import hashlib
+
+    cache_dir = user_model_cache_dir()
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    final_path = cache_dir / MODEL_FILENAME
+    tmp_path = cache_dir / (MODEL_FILENAME + ".part")
+
+    try:
+        req = urllib.request.Request(MODEL_URL, headers={"User-Agent": "CensorSandbox/1.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            total = int(resp.headers.get("Content-Length") or 0)
+            hasher = hashlib.sha256()
+            written = 0
+            with open(tmp_path, "wb") as f:
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise ModelDownloadError("Download cancelled.")
+                    chunk = resp.read(1 << 16)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    hasher.update(chunk)
+                    written += len(chunk)
+                    if progress_cb and total:
+                        progress_cb(min(1.0, written / total))
+    except ModelDownloadError:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    except Exception as e:
+        tmp_path.unlink(missing_ok=True)
+        raise ModelDownloadError(f"Couldn't download the model: {e}") from e
+
+    digest = hasher.hexdigest()
+    if digest != MODEL_SHA256:
+        tmp_path.unlink(missing_ok=True)
+        raise ModelDownloadError(
+            "Downloaded file didn't match the expected checksum — it may have been "
+            "corrupted or tampered with in transit. Nothing was installed; try again."
+        )
+
+    tmp_path.replace(final_path)
+    return str(final_path)
+
+
+detector = None
+
+
+def init_detector(model_path=None):
+    """Constructs the global `detector`. Call this once, after confirming a
+    model is available, before starting the Flask server."""
+    global detector
+    if model_path is None:
+        model_path = find_local_model_path()
+    if not model_path or not Path(model_path).is_file():
+        raise FileNotFoundError("The detection model wasn't found on this PC.")
+    detector = NudeDetector(model_path=model_path)
+    return detector
+
 
 # Multiple videos can be uploaded/processed at once (each gets its own
 # background thread + job_id), but running unlimited concurrent GPU
@@ -150,6 +288,59 @@ def black_box_region(frame, box):
     frame[y:y + h, x:x + w] = 0
 
 
+def pixelate_region(frame, box):
+    """Mirrors the client's pixelateRegion: shrink to blocks, scale back up
+    with nearest-neighbor so each source block becomes one flat square."""
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w]
+    block_size = max(6, round(min(w, h) / 9))
+    small_w = max(1, round(w / block_size))
+    small_h = max(1, round(h / block_size))
+    small = cv2.resize(roi, (small_w, small_h), interpolation=cv2.INTER_LINEAR)
+    pixelated = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
+    frame[y:y + h, x:x + w] = pixelated
+
+
+def frosted_region(frame, box):
+    """Mirrors the client's frostedRegion: heavier blur plus a translucent
+    light wash so shape still reads but no detail does."""
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    blur_region(frame, (x, y, w, h), radius=32)
+    roi = frame[y:y + h, x:x + w]
+    wash = np.full_like(roi, 233)  # approximates rgba(233,236,242,0.32)
+    frame[y:y + h, x:x + w] = cv2.addWeighted(roi, 0.68, wash, 0.32, 0)
+
+
+def solid_fill_region(frame, box, color_bgr):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    frame[y:y + h, x:x + w] = color_bgr
+
+
+def hex_to_bgr(hex_color):
+    hex_color = (hex_color or "#000000").lstrip("#")
+    if len(hex_color) != 6:
+        return (0, 0, 0)
+    try:
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return (b, g, r)
+    except ValueError:
+        return (0, 0, 0)
+
+
 def lerp_box(box_a, box_b, t):
     return [a + (b - a) * t for a, b in zip(box_a, box_b)]
 
@@ -221,7 +412,7 @@ def detect():
     return jsonify({"width": int(img.shape[1]), "height": int(img.shape[0]), "all_detections": all_detections})
 
 
-def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style, censor_classes):
+def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style, censor_classes, solid_color_bgr=(0, 0, 0)):
     try:
         set_progress(job_id, status="decoding", current=0, total=1)
 
@@ -326,8 +517,14 @@ def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style
                 else:
                     continue
                 total_regions_censored += 1
-                if style == "box":
+                if style == "pixelate":
+                    pixelate_region(frame, box)
+                elif style == "frosted":
+                    frosted_region(frame, box)
+                elif style == "box":
                     black_box_region(frame, box)
+                elif style == "solid":
+                    solid_fill_region(frame, box, solid_color_bgr)
                 else:
                     blur_region(frame, box)
 
@@ -363,6 +560,7 @@ def start_video_job():
 
     sample_every = max(1, int(request.form.get("sample_every", 5)))
     style = request.form.get("style", "blur")
+    solid_color_bgr = hex_to_bgr(request.form.get("solid_color", "#000000"))
 
     requested_categories = [c.strip() for c in request.form.get("categories", "genitals,breasts").split(",") if c.strip()]
     censor_classes = []
@@ -382,7 +580,7 @@ def start_video_job():
 
     thread = threading.Thread(
         target=process_video_job,
-        args=(job_id, src_path, job_dir, frames_dir, sample_every, style, censor_classes),
+        args=(job_id, src_path, job_dir, frames_dir, sample_every, style, censor_classes, solid_color_bgr),
         daemon=True,
     )
     thread.start()
@@ -434,4 +632,16 @@ def health():
 if __name__ == "__main__":
     # Bound to localhost only — connect_launcher.py is what makes this
     # reachable from the browser, via a tunnel it controls and tears down.
+    # (connect_launcher.py calls init_detector() itself, with a GUI prompt to
+    # auto-download the model if it's missing, before ever importing/running
+    # this module. Running app.py directly skips that UI, so just try the
+    # normal search and fail with a clear message rather than a raw
+    # ONNXRuntimeError if nothing's there.)
+    try:
+        init_detector()
+    except FileNotFoundError as e:
+        print(f"\n✗ {e}")
+        print(f"  Expected it at: {find_local_model_path() or user_model_cache_dir() / MODEL_FILENAME}")
+        print(f"  Download it manually from: {MODEL_URL}")
+        raise SystemExit(1)
     app.run(host="127.0.0.1", port=5000, debug=False, threaded=True)

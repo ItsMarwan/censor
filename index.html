@@ -3,7 +3,27 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Censor — local content-shield</title>
+<title>Censor — see it before you share it</title>
+<meta name="description" content="Detect and blur explicit regions in photos and video, entirely on your own machine. No server storage, no account, nothing uploaded." />
+<meta name="theme-color" content="#10131a" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Censor — see it before you share it" />
+<meta property="og:description" content="Detect and blur explicit regions in photos and video, entirely on your own machine. Nothing is uploaded to a server." />
+<meta property="og:image" content="https://itsmarwan.github.io/censor/assets/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:url" content="https://itsmarwan.github.io/censor/" />
+<meta property="og:site_name" content="Censor" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="Censor — see it before you share it" />
+<meta name="twitter:description" content="Detect and blur explicit regions in photos and video, entirely on your own machine." />
+<meta name="twitter:image" content="https://itsmarwan.github.io/censor/assets/og-image.png" />
+<link rel="icon" href="assets/brand-mark.svg" type="image/svg+xml" />
+<link rel="alternate icon" href="favicon.ico" />
+<link rel="apple-touch-icon" href="assets/brand-mark.svg" />
+<link rel="manifest" href="manifest.webmanifest" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css" />
@@ -11,16 +31,19 @@
 <body>
 
 <nav class="navbar">
-  <a href="#/" class="brand">
+  <a href="#/" class="brand" data-route-link data-route="/">
     <span class="brand-mark">
-      <svg viewBox="0 0 24 24" fill="none" stroke="#0a1512" stroke-width="2.2"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#0a1512" stroke-width="2.1">
+        <path d="M2 12c2.6-5.2 6.2-7.6 10-7.6s7.4 2.4 10 7.6c-2.6 5.2-6.2 7.6-10 7.6S4.6 17.2 2 12Z"/>
+        <circle cx="12" cy="12" r="2.5" fill="#0a1512" stroke="none"/>
+      </svg>
     </span>
     Censor
   </a>
   <div class="nav-links" id="navLinks">
     <a href="#/" data-route="/">Home</a>
     <a href="#/docs" data-route="/docs">Docs</a>
-    <a href="#/integration" data-route="/integration">Integration</a>
+    <a href="#/integration" data-route="/integration">For developers</a>
   </div>
   <div class="nav-status" id="navStatus">
     <span class="status-dot"></span>
@@ -32,33 +55,116 @@
 
   <section class="view" id="view-home" data-view="/">
 
-    <div id="gate" class="panel gate">
-      <div class="pairing">
-        <div class="pair-node linked" id="nodeBrowser">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+    <div id="gate" class="onboarding">
+
+      <div class="eyebrow">local-only processing</div>
+      <h1 class="page-title">See it before you share it</h1>
+      <p class="page-sub">Censor finds exposed regions in a photo or video and blurs, boxes, or pixelates them — on your own computer. Nothing you upload ever reaches a server we run.</p>
+
+      <div class="steps-row">
+
+        <div class="panel step-card">
+          <div class="step-card-head">
+            <span class="step-num">1</span>
+            <div>
+              <h2>Get the sandbox</h2>
+              <p>A small local app that does the actual detection and blurring on your machine.</p>
+            </div>
+          </div>
+
+          <div id="downloadIdle" class="download-block">
+            <a id="downloadAppBtn" class="btn btn-accent btn-block" href="downloads/CensorSandbox-Setup.exe" download>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+              <span>Download for Windows (.exe)</span>
+            </a>
+            <p class="step-fine">Free, runs locally. <a href="#/integration" data-route-link data-route="/integration">Prefer macOS/Linux or running from source? →</a></p>
+          </div>
+
+          <div id="downloadPreparing" class="download-block" style="display:none">
+            <div class="btn btn-ghost btn-block" style="cursor:default">
+              <span class="spinner" aria-hidden="true"></span>
+              <span>Preparing your download…</span>
+            </div>
+          </div>
+
+          <div id="downloadDone" class="download-block" style="display:none">
+            <div class="download-confirm">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M4 12.5 9.5 18 20 6"/></svg>
+              <div>
+                <strong>CensorSandbox-Setup.exe</strong> is downloading
+                <div class="step-fine">Open it once it finishes — Windows may show an "unknown publisher" warning, that's expected for a new app; click "More info → Run anyway."</div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div class="pair-link" id="pairLink"></div>
-        <div class="pair-node" id="nodeSandbox">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>
+
+        <div class="panel step-card">
+          <div class="step-card-head">
+            <span class="step-num">2</span>
+            <div>
+              <h2 id="gateTitle">Pair this tab</h2>
+              <p id="gateSub">Nothing gets analyzed on a server we run. Detection happens on your own machine — download the app, click Start, and paste the connection code it shows below.</p>
+            </div>
+          </div>
+
+          <div class="pairing">
+            <div class="pair-node linked" id="nodeBrowser">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </div>
+            <div class="pair-link" id="pairLink"></div>
+            <div class="pair-node" id="nodeSandbox">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h4"/></svg>
+            </div>
+          </div>
+
+          <form class="connect-form" id="connectForm">
+            <input type="text" id="connectInput" placeholder="paste connection code or full URL — e.g. 8f2a-91cd or https://…" autocomplete="off" spellcheck="false" />
+            <button type="submit" class="btn btn-accent" id="connectBtn">Pair</button>
+          </form>
+          <div class="gate-error" id="gateError"></div>
+          <p class="gate-hint" id="gateHint">Don't have the app yet? Grab it in step 1.</p>
         </div>
       </div>
 
-      <div class="eyebrow" style="justify-content:center">local-only processing</div>
-      <h2 id="gateTitle">Pair with your sandbox</h2>
-      <p class="gate-sub" id="gateSub">
-        Nothing gets analyzed on a server we run. Detection happens on your own machine —
-        download the launcher, start the sandbox, and paste the connection code it prints
-        below to pair this tab with it.
-      </p>
+      <div class="panel walkthrough" id="walkthroughPanel" style="display:none">
+        <div class="panel-head">What you'll see when you open it</div>
+        <div class="panel-body walkthrough-body">
+          <div class="walkthrough-art" aria-hidden="true">
+            <svg viewBox="0 0 380 300" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="1" width="378" height="298" rx="14" fill="#191d26" stroke="#262c3a"/>
+              <rect x="1" y="1" width="378" height="34" rx="14" fill="#1f2430"/>
+              <circle cx="20" cy="18" r="5" fill="#4bd8c9"/>
+              <text x="34" y="22" font-family="JetBrains Mono, monospace" font-size="11" fill="#8b93a5">Censor Sandbox</text>
+              <circle cx="352" cy="18" r="5" fill="#262c3a"/>
 
-      <form class="connect-form" id="connectForm">
-        <input type="text" id="connectInput" placeholder="paste connection code or full URL — e.g. 8f2a-91cd or https://…" autocomplete="off" spellcheck="false" />
-        <button type="submit" class="btn btn-accent" id="connectBtn">Pair</button>
-      </form>
-      <div class="gate-error" id="gateError"></div>
-      <p class="gate-hint" id="gateHint">
-        Don't have the launcher yet? <a href="#/integration">Get the sandbox script →</a>
-      </p>
+              <rect x="24" y="52" width="332" height="46" rx="10" fill="#1f2430"/>
+              <circle cx="46" cy="75" r="6" fill="#4bd8c9"/>
+              <text x="62" y="72" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="#e9ecf2">Sandbox ready</text>
+              <text x="62" y="87" font-family="Inter, sans-serif" font-size="10.5" fill="#8b93a5">Detector running on this machine</text>
+
+              <text x="24" y="120" font-family="JetBrains Mono, monospace" font-size="9.5" letter-spacing="1" fill="#5c6478">YOUR PAIRING CODE</text>
+              <rect x="24" y="128" width="332" height="42" rx="10" fill="#10131a" stroke="#262c3a"/>
+              <text x="40" y="154" font-family="JetBrains Mono, monospace" font-size="15" fill="#4bd8c9">8f2a-91cd-3e07</text>
+
+              <rect x="24" y="182" width="160" height="34" rx="8" fill="#4bd8c9"/>
+              <text x="60" y="203" font-family="Inter, sans-serif" font-size="11.5" font-weight="700" fill="#0a1512">Copy code</text>
+              <rect x="196" y="182" width="160" height="34" rx="8" fill="#262c3a"/>
+              <text x="222" y="203" font-family="Inter, sans-serif" font-size="11.5" font-weight="600" fill="#e9ecf2">Open pairing page</text>
+
+              <text x="24" y="250" font-family="Inter, sans-serif" font-size="10.5" fill="#5c6478">Leave this window open while you use the site.</text>
+              <text x="24" y="266" font-family="Inter, sans-serif" font-size="10.5" fill="#5c6478">Closing it disconnects your sandbox immediately.</text>
+
+              <rect x="24" y="128" width="332" height="42" fill="#4bd8c9" opacity="0.08"/>
+            </svg>
+          </div>
+          <ol class="step-list walkthrough-steps">
+            <li><strong>Open the app</strong> you downloaded and click <strong>Start sandbox</strong>.</li>
+            <li>Wait a few seconds while it boots the local detector — a progress bar shows this.</li>
+            <li>It shows a <strong>pairing code</strong>, like the box on the left. Click <strong>Copy code</strong>.</li>
+            <li>Come back here and paste it into <strong>step 2</strong> above, then click <strong>Pair</strong>.</li>
+          </ol>
+        </div>
+      </div>
     </div>
 
     <div id="app" style="display:none">
@@ -78,6 +184,12 @@
                 <div class="dz-label" id="dropLabel">Choose or drag image(s) or mp4(s)</div>
                 <div class="dz-sub">Multiple mp4s process concurrently on the sandbox</div>
               </label>
+
+              <label class="chip pre-blur-chip">
+                <input type="checkbox" id="preBlurToggle" checked />
+                <span>Blur photo until it's been scanned</span>
+              </label>
+
               <button id="analyzeBtn" class="btn btn-accent btn-block" style="margin-top:14px" disabled>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
                 <span id="analyzeLabel">Analyze &amp; censor</span>
@@ -92,9 +204,36 @@
             <div class="panel-body" style="display:flex; flex-direction:column; gap:16px;">
               <div>
                 <div class="field-label">Style</div>
-                <div class="opt-row">
-                  <label class="chip"><input type="radio" name="style" value="blur" checked /> Blur</label>
-                  <label class="chip"><input type="radio" name="style" value="box" /> Black box</label>
+                <div class="swatch-row" id="styleSwatches">
+                  <label class="swatch">
+                    <input type="radio" name="style" value="blur" checked />
+                    <span class="swatch-preview swatch-blur"></span>
+                    <span class="swatch-label">Gaussian blur</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="pixelate" />
+                    <span class="swatch-preview swatch-pixelate"></span>
+                    <span class="swatch-label">Pixelate</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="frosted" />
+                    <span class="swatch-preview swatch-frosted"></span>
+                    <span class="swatch-label">Frosted glass</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="box" />
+                    <span class="swatch-preview swatch-box"></span>
+                    <span class="swatch-label">Black box</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="solid" />
+                    <span class="swatch-preview swatch-solid" id="solidSwatchPreview"></span>
+                    <span class="swatch-label">Solid color</span>
+                  </label>
+                </div>
+                <div id="solidColorWrap" style="display:none; margin-top:10px; align-items:center; gap:10px;">
+                  <input type="color" id="solidColorInput" value="#0a0a0a" />
+                  <span class="step-fine" style="margin:0">Fill color for the "Solid color" style</span>
                 </div>
               </div>
               <div>
@@ -137,7 +276,13 @@
 
         <div class="panel preview-panel" id="previewPanel">
           <button id="focusBackBtn" class="btn btn-ghost" style="display:none; position:absolute; top:14px; left:14px; z-index:10;">← Back</button>
-          <div style="position:absolute; top:14px; right:14px; display:flex; gap:8px; z-index:10;">
+          <div class="preview-toolbar">
+            <button id="downloadResultBtn" class="btn btn-ghost" title="Download censored image" style="padding:9px;" disabled>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+            </button>
+            <button id="copyResultBtn" class="btn btn-ghost" title="Copy censored image" style="padding:9px;" disabled>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
+            </button>
             <button id="focusBtn" class="btn btn-ghost" title="Expand in-page" style="padding:9px;">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
             </button>
@@ -168,15 +313,17 @@
   <section class="view" id="view-docs" data-view="/docs">
     <div class="eyebrow">reference</div>
     <h1 class="page-title">Docs</h1>
-    <p class="page-sub">How pairing works, what gets detected, and every option in the UI.</p>
+    <p class="page-sub">How pairing works, what gets detected, how to embed the detector in your own project, and every option in the UI.</p>
 
     <div class="docs-grid">
-      <div class="docs-nav">
-        <a href="#doc-model">Detection model</a>
-        <a href="#doc-pairing">Pairing &amp; codes</a>
-        <a href="#doc-images">Images</a>
-        <a href="#doc-video">Video queue</a>
-        <a href="#doc-privacy">Privacy model</a>
+      <div class="docs-nav" id="docsNav">
+        <a href="#doc-model" data-target="doc-model">Detection model</a>
+        <a href="#doc-pairing" data-target="doc-pairing">Pairing &amp; codes</a>
+        <a href="#doc-images" data-target="doc-images">Images</a>
+        <a href="#doc-video" data-target="doc-video">Video queue</a>
+        <a href="#doc-effects" data-target="doc-effects">Censor styles</a>
+        <a href="#doc-integrate" data-target="doc-integrate">Integrate NudeNet</a>
+        <a href="#doc-privacy" data-target="doc-privacy">Privacy model</a>
       </div>
       <div>
         <div class="doc-section" id="doc-model">
@@ -190,28 +337,88 @@
         </div>
         <div class="doc-section" id="doc-pairing">
           <h3>Pairing &amp; connection codes</h3>
-          <p>The launcher script starts a detector process on your machine, then opens a tunnel so this
-            page can reach it, and prints a short code. Entering that code (or the full URL it also
-            prints) on the Home tab is the only way this site ever learns where your sandbox lives —
+          <p>The sandbox app starts a detector process on your machine, then opens a tunnel so this
+            page can reach it, and shows a short code. Entering that code (or the full URL it also
+            shows) on the Home tab is the only way this site ever learns where your sandbox lives —
             nothing is registered or stored anywhere else.</p>
-          <p>Codes are single-session: closing the launcher, or restarting it, invalidates the old one.
+          <p>Codes are single-session: closing the app, or restarting it, invalidates the old one.
             The address bar can also carry a code directly, as
             <code style="font-family:var(--font-mono); color:var(--accent)">/u/&lt;code&gt;</code> — useful
             for re-opening a tab without retyping it, not for sharing your sandbox with anyone else.</p>
         </div>
         <div class="doc-section" id="doc-images">
           <h3>Images</h3>
-          <p>Upload one image at a time. It's sent to your sandbox once, boxes come back, and everything
-            after that — blur radius, box vs. blur, which regions are active — is redrawn instantly in
-            the browser with no further round trip.</p>
+          <p>Upload one image at a time. Before it's sent, the browser scales large photos down to a
+            reasonable size for detection — this keeps the analysis fast even over a tunnel connection
+            with limited bandwidth. Boxes come back in that scaled space and are mapped back onto the
+            full-resolution image, so what you see (and download) is never downscaled.</p>
+          <p>Everything after detection — blur radius, style, which regions are active — is redrawn
+            instantly in the browser with no further round trip. Use the toolbar above the preview to
+            download or copy the finished image.</p>
         </div>
         <div class="doc-section" id="doc-video">
           <h3>Video queue</h3>
           <p>Each mp4 becomes its own job with its own progress bar and runs independently, so queuing a
             second video doesn't block the first. The sandbox samples every N frames (you're asked per
             video), runs detection only on those, and interpolates boxes for the frames in between so the
-            censor doesn't flicker. The sandbox caps how many videos run detection at once — extras wait
-            their turn automatically, decoding and encoding still happen in parallel.</p>
+            censor doesn't flicker. Frames are streamed straight into the video encoder instead of being
+            written to disk one at a time, which is what keeps longer videos from crawling. The sandbox
+            caps how many videos run detection at once — extras wait their turn automatically, decoding
+            and encoding still happen in parallel.</p>
+        </div>
+        <div class="doc-section" id="doc-effects">
+          <h3>Censor styles</h3>
+          <p>Five ways to cover a detected region, picked per job in the Censor options panel:</p>
+          <ul>
+            <li><strong>Gaussian blur</strong> — smooths the region; strength scales with box size.</li>
+            <li><strong>Pixelate</strong> — mosaics the region into large flat blocks.</li>
+            <li><strong>Frosted glass</strong> — a heavier blur plus a translucent wash, so shape reads but detail doesn't.</li>
+            <li><strong>Black box</strong> — a flat opaque rectangle.</li>
+            <li><strong>Solid color</strong> — a flat rectangle in any color you pick, useful for on-brand thumbnails.</li>
+          </ul>
+        </div>
+        <div class="doc-section" id="doc-integrate">
+          <h3>Integrate NudeNet in your own project</h3>
+          <p>The sandbox's detection logic is just the open-source <code style="font-family:var(--font-mono); color:var(--accent)">nudenet</code>
+            Python package — there's no proprietary model or API here. If you're building your own tool,
+            you can call it directly:</p>
+          <pre class="code-block"><span class="c-muted"># pip install nudenet opencv-python</span>
+<span class="c-accent">from</span> nudenet <span class="c-accent">import</span> NudeDetector
+<span class="c-accent">import</span> cv2
+
+detector = NudeDetector()
+image = cv2.imread(<span class="c-accent">"photo.jpg"</span>)
+
+results = detector.detect(image)
+<span class="c-accent">for</span> r <span class="c-accent">in</span> results:
+    <span class="c-muted"># r == {"class": "FEMALE_BREAST_EXPOSED", "score": 0.87, "box": [x, y, w, h]}</span>
+    <span class="c-accent">print</span>(r[<span class="c-accent">"class"</span>], r[<span class="c-accent">"score"</span>], r[<span class="c-accent">"box"</span>])</pre>
+          <p>A few things worth knowing before you build on it:</p>
+          <ul>
+            <li><strong>Classes.</strong> The full label set is
+              <code style="font-family:var(--font-mono)">FEMALE_GENITALIA_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">MALE_GENITALIA_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">ANUS_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">FEMALE_BREAST_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">MALE_BREAST_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">BUTTOCKS_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">FEET_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">BELLY_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">ARMPITS_EXPOSED</code>,
+              <code style="font-family:var(--font-mono)">FACE_FEMALE</code>,
+              <code style="font-family:var(--font-mono)">FACE_MALE</code>. Some versions also return matching
+              "_COVERED" classes for clothed regions — filter on score and class
+              the same way <code style="font-family:var(--font-mono)">app.py</code> does.</li>
+            <li><strong>Thresholding.</strong> Drop anything under roughly <code style="font-family:var(--font-mono)">0.25</code> score
+              to cut false positives; raise it if you'd rather miss borderline detections than flag clean ones.</li>
+            <li><strong>Batching.</strong> For many frames/images, <code style="font-family:var(--font-mono)">detector.detect_batch(list_of_frames)</code>
+              is far faster than calling <code style="font-family:var(--font-mono)">detect()</code> in a loop.</li>
+            <li><strong>GPU.</strong> NudeNet runs on <code style="font-family:var(--font-mono)">onnxruntime</code> under the hood — install
+              <code style="font-family:var(--font-mono)">onnxruntime-gpu</code> instead of the CPU package and it picks up CUDA automatically if a
+              compatible GPU/driver is present.</li>
+            <li><strong>Reference implementation.</strong> <code style="font-family:var(--font-mono)">app.py</code> in this repo is a complete
+              Flask wrapper around the same calls, including video sampling/interpolation — copy from it freely.</li>
+          </ul>
         </div>
         <div class="doc-section" id="doc-privacy">
           <h3>Privacy model</h3>
@@ -224,52 +431,82 @@
   </section>
 
   <section class="view" id="view-integration" data-view="/integration">
-    <div class="eyebrow">setup</div>
-    <h1 class="page-title">Integration</h1>
-    <p class="page-sub">Get the sandbox running locally, then pair this tab with it.</p>
+    <div class="eyebrow">for developers</div>
+    <h1 class="page-title">Run it from source</h1>
+    <p class="page-sub">Most people should just grab the app from the home page. This page is for macOS/Linux, or anyone who'd rather run the Python directly.</p>
 
     <ol class="step-list">
-      <li><strong>Install the launcher.</strong> Requires Python 3.9+ and ffmpeg on your PATH.
+      <li><strong>Install the sandbox.</strong> Requires Python 3.9+ and ffmpeg on your PATH.
         <pre class="code-block" style="margin-top:10px"><span class="c-muted"># from the toolkit folder</span>
 pip install -r requirements.txt</pre>
       </li>
-      <li><strong>Start the sandbox.</strong> This boots the local detector and opens a tunnel to it.
+      <li><strong>Start it.</strong> This opens a small window, boots the local detector, and opens a tunnel to it.
         <pre class="code-block" style="margin-top:10px">python connect_launcher.py</pre>
       </li>
-      <li><strong>Confirm the prompt.</strong> The launcher shows a HUD and asks before it starts
-        anything or exposes a tunnel — nothing runs silently.
-        <pre class="code-block" style="margin-top:10px"><span class="c-accent">Start local sandbox?</span> [Y/n] y
-<span class="c-muted">[■■■■■■■■■□□] booting detector… 82%</span></pre>
-      </li>
-      <li><strong>Copy the code it prints.</strong>
-        <pre class="code-block" style="margin-top:10px"><span class="c-muted">sandbox ready. pair this tab with:</span>
-<span class="c-accent">https://itsmarwan.github.io/censor/u/8f2a91cd</span>
-<span class="c-muted">or just the code:</span> <span class="c-accent">8f2a91cd</span></pre>
-      </li>
-      <li><strong>Paste it into the Home tab</strong> and click Pair. The UI unlocks once the
-        connection is confirmed.</li>
+      <li><strong>Click Start sandbox</strong> in the window that opens. Nothing runs or is exposed until you do.</li>
+      <li><strong>Copy the pairing code</strong> it shows once ready, and paste it on the <a href="#/" data-route-link data-route="/">Home</a> tab.</li>
     </ol>
 
     <div class="callout warn" style="margin-top:8px">
       <strong>About the masked URL:</strong> the <code style="font-family:var(--font-mono)">/u/&lt;code&gt;</code>
       link is a cosmetic address for this static site — it decodes to your sandbox's real tunnel
       address entirely in your own browser. It isn't a hidden relay server run by us; nobody but you
-      and whoever you hand the code to can use it, and the tunnel only lives as long as the launcher
+      and whoever you hand the code to can use it, and the tunnel only lives as long as the app
       is running.
+    </div>
+
+    <div class="doc-section" style="margin-top:44px">
+      <h3>Running fully local (no tunnel)</h3>
+      <p>If the browser and the sandbox are on the same machine, you don't need a tunnel at all —
+        choose <strong>Local only</strong> in the app window, set <code style="font-family:var(--font-mono)">"local": true</code>
+        in <code style="font-family:var(--font-mono)">config.json</code>, and pair with
+        <code style="font-family:var(--font-mono)">127.0.0.1:5000</code> directly. This is also the fastest option
+        since there's no tunnel latency at all.</p>
     </div>
 
     <div class="doc-section" style="margin-top:44px">
       <h3>Files in the toolkit</h3>
       <p><code style="font-family:var(--font-mono); color:var(--accent)">app.py</code> — the Flask
-        detector (NudeNet), unchanged detection logic, image + video endpoints.</p>
+        detector (NudeNet), image + video endpoints.</p>
       <p><code style="font-family:var(--font-mono); color:var(--accent)">connect_launcher.py</code> —
-        the HUD script: starts <code style="font-family:var(--font-mono)">app.py</code>, opens the
-        tunnel, prints your pairing code.</p>
+        the desktop app: starts <code style="font-family:var(--font-mono)">app.py</code>, opens the
+        tunnel, shows your pairing code. This is also the source packaged into the .exe on the home page.</p>
       <p><code style="font-family:var(--font-mono); color:var(--accent)">requirements.txt</code> —
         everything <code style="font-family:var(--font-mono)">pip install -r</code> needs.</p>
+      <p>See <code style="font-family:var(--font-mono); color:var(--accent)">README.md</code> for how the
+        packaged <code style="font-family:var(--font-mono)">.exe</code> itself is built.</p>
     </div>
   </section>
 
+</div>
+
+<div id="frameModalOverlay" class="modal-overlay" style="display:none">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="frameModalTitle">
+    <div class="modal-icon">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="3" y="4" width="18" height="14" rx="2.5" stroke="currentColor" stroke-width="1.6"/>
+        <path d="M3 9h18" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="8" cy="6.5" r="0.9" fill="currentColor"/>
+      </svg>
+    </div>
+    <h3 id="frameModalTitle">Detection rate</h3>
+    <p class="modal-sub" id="frameModalFileName">Run detection every how many frames?</p>
+    <p class="modal-hint">1 = every frame — most accurate, slowest. Higher = faster, interpolates between samples.</p>
+    <div class="modal-field">
+      <button type="button" class="stepper-btn" id="frameStepDown" aria-label="Decrease">−</button>
+      <input type="number" id="frameModalInput" min="1" step="1" value="5" inputmode="numeric" />
+      <button type="button" class="stepper-btn" id="frameStepUp" aria-label="Increase">+</button>
+    </div>
+    <div class="modal-presets" id="frameModalPresets">
+      <button type="button" class="preset-chip" data-val="1">1 · Most accurate</button>
+      <button type="button" class="preset-chip" data-val="5">5 · Balanced</button>
+      <button type="button" class="preset-chip" data-val="10">10 · Fastest</button>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="frameModalCancel">Cancel</button>
+      <button type="button" class="btn btn-accent" id="frameModalConfirm">Start scan</button>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>
