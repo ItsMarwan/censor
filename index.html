@@ -174,31 +174,7 @@
 
       <div class="app-grid">
 
-        <div style="display:flex; flex-direction:column; gap:18px;">
-
-          <div class="panel">
-            <div class="panel-body">
-              <label id="dropZone" class="dropzone">
-                <input type="file" id="fileInput" accept="image/*,video/mp4" multiple class="hidden" style="display:none" />
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
-                <div class="dz-label" id="dropLabel">Choose or drag image(s) or mp4(s)</div>
-                <div class="dz-sub">Multiple mp4s process concurrently on the sandbox</div>
-              </label>
-
-              <label class="chip pre-blur-chip">
-                <input type="checkbox" id="preBlurToggle" checked />
-                <span>Blur photo until it's been scanned</span>
-              </label>
-
-              <button id="analyzeBtn" class="btn btn-accent btn-block" style="margin-top:14px" disabled>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
-                <span id="analyzeLabel">Analyze &amp; censor</span>
-              </button>
-              <button id="resetBtn" class="btn btn-ghost btn-block" style="margin-top:8px">Reset</button>
-              <div class="status-line" id="statusMsg"></div>
-            </div>
-          </div>
-
+        <div class="left-stack">
           <div class="panel">
             <div class="panel-head">Censor options</div>
             <div class="panel-body" style="display:flex; flex-direction:column; gap:16px;">
@@ -208,7 +184,12 @@
                   <label class="swatch">
                     <input type="radio" name="style" value="blur" checked />
                     <span class="swatch-preview swatch-blur"></span>
-                    <span class="swatch-label">Gaussian blur</span>
+                    <span class="swatch-label">Gentle blur</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="soft-blur" />
+                    <span class="swatch-preview swatch-soft-blur"></span>
+                    <span class="swatch-label">Soft blur</span>
                   </label>
                   <label class="swatch">
                     <input type="radio" name="style" value="pixelate" />
@@ -218,7 +199,17 @@
                   <label class="swatch">
                     <input type="radio" name="style" value="frosted" />
                     <span class="swatch-preview swatch-frosted"></span>
-                    <span class="swatch-label">Frosted glass</span>
+                    <span class="swatch-label">Frosted</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="smudge" />
+                    <span class="swatch-preview swatch-smudge"></span>
+                    <span class="swatch-label">Smudge</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="cover" />
+                    <span class="swatch-preview swatch-cover"></span>
+                    <span class="swatch-label">Cover</span>
                   </label>
                   <label class="swatch">
                     <input type="radio" name="style" value="box" />
@@ -226,14 +217,49 @@
                     <span class="swatch-label">Black box</span>
                   </label>
                   <label class="swatch">
+                    <input type="radio" name="style" value="outline" />
+                    <span class="swatch-preview swatch-outline"></span>
+                    <span class="swatch-label">Outline</span>
+                  </label>
+                  <label class="swatch">
                     <input type="radio" name="style" value="solid" />
                     <span class="swatch-preview swatch-solid" id="solidSwatchPreview"></span>
                     <span class="swatch-label">Solid color</span>
                   </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="glitch" />
+                    <span class="swatch-preview swatch-glitch"></span>
+                    <span class="swatch-label">Glitch</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="rainbow" />
+                    <span class="swatch-preview swatch-rainbow"></span>
+                    <span class="swatch-label">Rainbow</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="dots" />
+                    <span class="swatch-preview swatch-dots"></span>
+                    <span class="swatch-label">Dot grid</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="scanline" />
+                    <span class="swatch-preview swatch-scanline"></span>
+                    <span class="swatch-label">Scanlines</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="negative" />
+                    <span class="swatch-preview swatch-negative"></span>
+                    <span class="swatch-label">Negative</span>
+                  </label>
+                  <label class="swatch">
+                    <input type="radio" name="style" value="emboss" />
+                    <span class="swatch-preview swatch-emboss"></span>
+                    <span class="swatch-label">Emboss</span>
+                  </label>
                 </div>
                 <div id="solidColorWrap" style="display:none; margin-top:10px; align-items:center; gap:10px;">
                   <input type="color" id="solidColorInput" value="#0a0a0a" />
-                  <span class="step-fine" style="margin:0">Fill color for the "Solid color" style</span>
+                  <span class="step-fine" style="margin:0">Fill color for solid, cover, and smudge styles</span>
                 </div>
               </div>
               <div>
@@ -262,16 +288,6 @@
               </label>
             </div>
           </div>
-
-          <div class="panel" id="logCard">
-            <div class="panel-head">Detection coordinates <span class="muted-tag" id="logCount"></span></div>
-            <div class="panel-body" style="max-height:320px; overflow-y:auto;">
-              <div id="logEmpty" style="text-align:center; color:var(--muted-2); font-size:13px; padding:30px 0;">
-                No regions detected yet. Upload an image and run analysis.
-              </div>
-              <div id="logList" style="display:none"></div>
-            </div>
-          </div>
         </div>
 
         <div class="panel preview-panel" id="previewPanel">
@@ -279,6 +295,9 @@
           <div class="preview-toolbar">
             <button id="downloadResultBtn" class="btn btn-ghost" title="Download censored image" style="padding:9px;" disabled>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 21h16"/></svg>
+            </button>
+            <button id="saveResultBtn" class="btn btn-ghost" title="Save image/video" style="padding:9px;" disabled>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="19"/></svg>
             </button>
             <button id="copyResultBtn" class="btn btn-ghost" title="Copy censored image" style="padding:9px;" disabled>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>
@@ -291,21 +310,81 @@
             </button>
           </div>
 
-          <div class="preview-empty" id="canvasPlaceholder">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
-            Upload an image or mp4 to see the preview here
-          </div>
-          <div style="display:none" id="canvasWrap"><canvas id="canvas"></canvas></div>
-          <div style="display:none; flex-direction:column; align-items:center; gap:10px; width:100%;" id="videoWrap">
-            <div id="previewVideoLabel" style="font-size:13px; font-weight:600; color:var(--muted)"></div>
-            <video id="previewVideo" controls style="width:100%; max-height:75vh; border-radius:10px; background:#000;"></video>
+          <div class="preview-surface" id="previewSurface">
+            <div class="preview-empty" id="canvasPlaceholder">
+              <div class="preview-empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+              </div>
+              <div class="preview-empty-title">Drop an image here</div>
+              <div class="preview-empty-copy">Drag from your desktop or click to browse. Videos also work here.</div>
+              <button type="button" class="btn btn-accent preview-browse-btn" id="previewBrowseBtn">Choose file</button>
+            </div>
+            <div class="preview-canvas-wrap" style="display:none" id="canvasWrap"><canvas id="canvas"></canvas></div>
+            <div class="preview-video-wrap" style="display:none" id="videoWrap">
+              <div id="previewVideoLabel" class="preview-video-label"></div>
+              <video id="previewVideo" controls></video>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="panel" id="videoQueuePanel" style="display:none; margin-top:22px;">
-        <div class="panel-head">Video queue <span class="muted-tag">sandbox caps GPU work — extras queue automatically</span></div>
-        <div class="panel-body" style="display:grid; grid-template-columns:1fr 1fr; gap:14px;" id="videoQueueList"></div>
+        <div class="right-stack">
+          <div class="panel">
+            <div class="panel-body">
+              <div class="section-heading">
+                <div>
+                  <div class="field-label">Upload</div>
+                  <div class="section-title">Start with an image or video</div>
+                </div>
+                <span class="status-pill">drag &amp; drop</span>
+              </div>
+
+              <input type="file" id="fileInput" accept="image/*,video/mp4" multiple class="hidden" style="display:none" />
+
+              <label class="chip pre-blur-chip">
+                <input type="checkbox" id="preBlurToggle" checked />
+                <span>Blur photo until it's been scanned</span>
+              </label>
+
+              <button id="analyzeBtn" class="btn btn-accent btn-block" style="margin-top:14px" disabled>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/></svg>
+                <span id="analyzeLabel">Analyze &amp; censor</span>
+              </button>
+              <button id="resetBtn" class="btn btn-ghost btn-block" style="margin-top:8px">Reset</button>
+              <div class="status-line" id="statusMsg"></div>
+            </div>
+          </div>
+
+          <div class="panel video-queue-panel" id="videoQueuePanel" style="display:block;">
+          <div class="panel-head" style="display:flex; align-items:center; gap:10px;">
+            <div style="font-weight:600;">Video</div>
+            <div class="muted-tag">sandbox caps GPU work — extras queue automatically</div>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+              <button id="toggleQueueBtn" class="btn btn-ghost" title="Collapse queue" style="padding:8px;">▾</button>
+            </div>
+          </div>
+          <div class="panel-body" id="videoQueueBody" style="display:flex; flex-direction:column; gap:12px;">
+            <div class="queue-tabs" style="display:flex; gap:8px;">
+              <button id="tabQueueBtn" class="btn btn-ghost" style="padding:8px;">Queue</button>
+              <button id="tabSavedBtn" class="btn btn-ghost" style="padding:8px;">Saved</button>
+            </div>
+            <div id="videoQueueList" style="display:grid; grid-template-columns:1fr; gap:10px;"></div>
+            <div id="savedList" style="display:none; grid-template-columns:1fr; gap:10px;"></div>
+          </div>
+        </div>
+
+        <div class="panel" id="logCard">
+          <div class="panel-head" style="display:flex; align-items:center; gap:8px;">
+            <div style="font-weight:600">Detection coordinates</div>
+            <div class="muted-tag" id="logCount"></div>
+            <button id="toggleAdvancedBtn" class="btn btn-ghost" style="margin-left:auto; padding:8px">Advanced</button>
+          </div>
+          <div id="logCardBody" class="panel-body" style="display:none; max-height:320px; overflow-y:auto;">
+            <div id="logEmpty" style="text-align:center; color:var(--muted-2); font-size:13px; padding:30px 0;">
+              No regions detected yet. Drop an image in the preview and run analysis.
+            </div>
+            <div id="logList" style="display:none"></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -368,13 +447,18 @@
         </div>
         <div class="doc-section" id="doc-effects">
           <h3>Censor styles</h3>
-          <p>Five ways to cover a detected region, picked per job in the Censor options panel:</p>
+          <p>Choose from a huge palette of censor effects, from blur and pixelation to outlines, glitch, rainbow overlays, dot grids, scanlines, negative inversion, and embossed fills.</p>
           <ul>
             <li><strong>Gaussian blur</strong> — smooths the region; strength scales with box size.</li>
             <li><strong>Pixelate</strong> — mosaics the region into large flat blocks.</li>
             <li><strong>Frosted glass</strong> — a heavier blur plus a translucent wash, so shape reads but detail doesn't.</li>
-            <li><strong>Black box</strong> — a flat opaque rectangle.</li>
-            <li><strong>Solid color</strong> — a flat rectangle in any color you pick, useful for on-brand thumbnails.</li>
+            <li><strong>Glitch</strong> — fractured color slices for an aggressive digital censor effect.</li>
+            <li><strong>Rainbow</strong> — bold gradient tint over the region, blended with the original image.</li>
+            <li><strong>Dot grid</strong> — dense dotted coverage for a stylized censor look.</li>
+            <li><strong>Scanlines</strong> — horizontal bands plus overlay, like old-school video distortion.</li>
+            <li><strong>Negative</strong> — inverts region colors for a striking, high-contrast treatment.</li>
+            <li><strong>Emboss</strong> — edge-driven fill with dark/light depth for a graphic, sculpted block.</li>
+            <li><strong>Black box / solid</strong> — opaque coverage when you want maximum privacy.</li>
           </ul>
         </div>
         <div class="doc-section" id="doc-integrate">

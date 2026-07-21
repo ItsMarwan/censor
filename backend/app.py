@@ -1,26 +1,3 @@
-"""
-Genital/breast NSFW region detector — backend
----------------------------------------------
-Image path: NudeNet object detector -> bounding boxes -> frontend blurs them.
-
-Video path (mp4): decode frames with OpenCV, run NudeNet in GPU batches on a
-sampled subset of frames (e.g. every 5th frame), linearly interpolate boxes
-for the frames in between so blur doesn't "flicker" on/off, apply the censor
-server-side (blur or black box, matching what the user picked in the UI),
-then re-encode to H.264 mp4 with ffmpeg — piping raw frames in and muxing the
-original audio track back in.
-
-This process is meant to be started by connect_launcher.py, which also opens
-a tunnel so the static site can reach it without a hardcoded IP. You can also
-run it directly for local-only use:
-
-    pip install -r requirements.txt
-    python app.py
-
-Requires ffmpeg on PATH. Requires an NVIDIA GPU + onnxruntime-gpu for fast
-video processing (NudeNet uses onnxruntime under the hood).
-"""
-
 import os
 import shutil
 import subprocess
@@ -37,6 +14,11 @@ from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from nudenet import NudeDetector
 
+try:
+    from style_utils import normalize_effect_style
+except ImportError:  # pragma: no cover - fallback for direct script execution
+    from backend.style_utils import normalize_effect_style
+
 app = Flask(__name__)
 # allow_headers includes ngrok-skip-browser-warning: when app.py is exposed
 # through a free ngrok tunnel (see connect_launcher.py), ngrok shows an HTML
@@ -52,9 +34,6 @@ CORS(
 
 @app.after_request
 def add_cors_headers(response):
-    # Belt-and-suspenders: guarantee the header is present even on error
-    # responses / responses raised from inside send_file's generator, which
-    # some flask-cors versions don't reliably patch.
     response.headers.setdefault("Access-Control-Allow-Origin", "*")
     response.headers.setdefault("Access-Control-Allow-Headers", "Content-Type, ngrok-skip-browser-warning")
     response.headers.setdefault("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -67,41 +46,11 @@ def handle_any_error(e):
     traceback.print_exc()
     return jsonify({"error": str(e)}), 500
 
-# onnxruntime-gpu will pick up CUDAExecutionProvider automatically if it's
-# installed and a CUDA-capable GPU + drivers are present. NudeDetector doesn't
-# expose a provider kwarg in older versions, so we just rely on the onnxruntime
-# wheel installed (see requirements.txt: onnxruntime-gpu, not onnxruntime).
-#
-# NudeDetector(), left to its own defaults, looks for its .onnx weights next
-# to nudenet's own nudenet.py (os.path.dirname(__file__)/320n.onnx). That
-# works fine with a normal `pip install`, but breaks for someone who only
-# downloaded the packaged .exe and not the Python library: a PyInstaller
-# build only auto-bundles Python modules, not sibling data files, so unless
-# --add-data explicitly included it (see README > Packaging), the model
-# simply isn't there. That's also just as true if a build was ever shipped
-# without it by mistake — this needs to be a runtime-recoverable situation,
-# not just a packaging instruction people have to get right.
-#
-# So: model lookup is separate from detector construction. connect_launcher.py
-# checks find_local_model_path() before starting the server; if it's missing,
-# it asks the user whether to download it, calls download_model() with a
-# progress callback if they say yes, then calls init_detector(). Running
-# app.py directly (python app.py) does the same thing non-interactively at
-# the bottom of this file.
-
 MODEL_FILENAME = "320n.onnx"
-# Same file NudeNet's own PyPI wheel ships (notAI-tech/NudeNet, v3 branch) —
-# pinned to a specific ref (not a moving branch pointer at request time) plus
-# a checksum, so a downloaded file is verified byte-for-byte before use.
 MODEL_URL = "https://raw.githubusercontent.com/notAI-tech/NudeNet/v3/nudenet/320n.onnx"
 MODEL_SHA256 = "c15d8273adad2d0a92f014cc69ab2d6c311a06777a55545f2c4eb46f51911f0f"
 
-
 def user_model_cache_dir():
-    """A persistent (non-temp) per-user folder to download the model into,
-    so a onefile .exe — which re-extracts to a fresh, wiped _MEI#### temp
-    folder on *every* launch — only needs to download it once, not once per
-    run."""
     if sys.platform == "win32":
         base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
     elif sys.platform == "darwin":
@@ -112,26 +61,16 @@ def user_model_cache_dir():
 
 
 def find_local_model_path():
-    """Look everywhere the model plausibly is. Returns a path string, or
-    None if it isn't anywhere — never raises, so callers can decide what to
-    do about a missing model (prompt to download, fail loudly, etc.)."""
     import nudenet as _nudenet_pkg
 
     candidates = []
     if getattr(sys, "frozen", False):
-        # PyInstaller onefile: files added via `--add-data src;nudenet`
-        # land at sys._MEIPASS/nudenet/<file> after extraction.
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
             candidates.append(Path(meipass) / "nudenet" / MODEL_FILENAME)
-        # Onedir builds (or a manually copied folder) may instead sit right
-        # next to the executable.
         candidates.append(Path(sys.executable).parent / "nudenet" / MODEL_FILENAME)
         candidates.append(Path(sys.executable).parent / "_internal" / "nudenet" / MODEL_FILENAME)
-    # Running from source, or a frozen build where --add-data happened to
-    # bundle it back at the package's normal relative spot.
     candidates.append(Path(os.path.dirname(_nudenet_pkg.__file__)) / MODEL_FILENAME)
-    # Previously auto-downloaded by this same app.
     candidates.append(user_model_cache_dir() / MODEL_FILENAME)
 
     for path in candidates:
@@ -145,11 +84,6 @@ class ModelDownloadError(Exception):
 
 
 def download_model(progress_cb=None, cancel_event=None):
-    """Downloads MODEL_URL to user_model_cache_dir(), verifying its sha256
-    against MODEL_SHA256 before it's considered valid. progress_cb, if given,
-    is called with a float 0..1 as bytes arrive. Returns the final path.
-    Raises ModelDownloadError on any network failure or checksum mismatch —
-    never leaves a corrupt/partial file at the final destination."""
     import hashlib
 
     cache_dir = user_model_cache_dir()
@@ -193,13 +127,9 @@ def download_model(progress_cb=None, cancel_event=None):
     tmp_path.replace(final_path)
     return str(final_path)
 
-
 detector = None
 
-
 def init_detector(model_path=None):
-    """Constructs the global `detector`. Call this once, after confirming a
-    model is available, before starting the Flask server."""
     global detector
     if model_path is None:
         model_path = find_local_model_path()
@@ -208,12 +138,6 @@ def init_detector(model_path=None):
     detector = NudeDetector(model_path=model_path)
     return detector
 
-
-# Multiple videos can be uploaded/processed at once (each gets its own
-# background thread + job_id), but running unlimited concurrent GPU
-# inference passes risks CUDA OOM. Cap how many jobs can be actively running
-# the model at the same time — decoding/writing/encoding for other jobs can
-# still happen in parallel, only the detect_batch() call queues behind this.
 MAX_CONCURRENT_GPU_JOBS = 2
 gpu_semaphore = threading.Semaphore(MAX_CONCURRENT_GPU_JOBS)
 
@@ -227,11 +151,6 @@ FACE_CLASSES = ["FACE_FEMALE", "FACE_MALE"]
 BELLY_CLASSES = ["BELLY_EXPOSED"]
 ARMPITS_CLASSES = ["ARMPITS_EXPOSED"]
 
-# NOTE: NudeNet is a body-part detector, not a general content classifier.
-# It has no classes for scat, urine/piss, or bestiality/animal genitalia — so
-# there's nothing real to wire a tickbox up to for those categories with this
-# model. The categories below are the full set of things NudeNet actually
-# detects with a bounding box.
 CATEGORY_MAP = {
     "genitals": GENITAL_ANUS_CLASSES,
     "breasts": BREAST_CLASSES,
@@ -245,17 +164,12 @@ CATEGORY_MAP = {
 WORK_DIR = Path(tempfile.gettempdir()) / "nsfw_blur_jobs"
 WORK_DIR.mkdir(exist_ok=True)
 
-# In-memory job registry for async video processing + progress polling.
 JOBS = {}
 JOBS_LOCK = threading.Lock()
-
 
 def set_progress(job_id, **kwargs):
     with JOBS_LOCK:
         JOBS[job_id].update(kwargs)
-
-
-# ---------------------------------------------------------------- utilities
 
 def clamp_box(x, y, w, h, width, height):
     x = max(0, int(x))
@@ -263,7 +177,6 @@ def clamp_box(x, y, w, h, width, height):
     w = min(int(round(w)), width - x)
     h = min(int(round(h)), height - y)
     return x, y, w, h
-
 
 def blur_region(frame, box, radius=25):
     x, y, w, h = box
@@ -278,7 +191,6 @@ def blur_region(frame, box, radius=25):
     blurred = cv2.GaussianBlur(roi, (k, k), radius)
     frame[y:y + h, x:x + w] = blurred
 
-
 def black_box_region(frame, box):
     x, y, w, h = box
     height, width = frame.shape[:2]
@@ -287,10 +199,7 @@ def black_box_region(frame, box):
         return
     frame[y:y + h, x:x + w] = 0
 
-
 def pixelate_region(frame, box):
-    """Mirrors the client's pixelateRegion: shrink to blocks, scale back up
-    with nearest-neighbor so each source block becomes one flat square."""
     x, y, w, h = box
     height, width = frame.shape[:2]
     x, y, w, h = clamp_box(x, y, w, h, width, height)
@@ -304,10 +213,7 @@ def pixelate_region(frame, box):
     pixelated = cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
     frame[y:y + h, x:x + w] = pixelated
 
-
 def frosted_region(frame, box):
-    """Mirrors the client's frostedRegion: heavier blur plus a translucent
-    light wash so shape still reads but no detail does."""
     x, y, w, h = box
     height, width = frame.shape[:2]
     x, y, w, h = clamp_box(x, y, w, h, width, height)
@@ -315,8 +221,30 @@ def frosted_region(frame, box):
         return
     blur_region(frame, (x, y, w, h), radius=32)
     roi = frame[y:y + h, x:x + w]
-    wash = np.full_like(roi, 233)  # approximates rgba(233,236,242,0.32)
+    wash = np.full_like(roi, 233)
     frame[y:y + h, x:x + w] = cv2.addWeighted(roi, 0.68, wash, 0.32, 0)
+
+
+def smudge_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w]
+    blurred = cv2.medianBlur(roi, 5)
+    frame[y:y + h, x:x + w] = blurred
+
+
+def cover_region(frame, box, color_bgr=(24, 24, 24)):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w]
+    tint = np.full_like(roi, color_bgr, dtype=np.uint8)
+    frame[y:y + h, x:x + w] = cv2.addWeighted(roi, 0.7, tint, 0.3, 0)
 
 
 def solid_fill_region(frame, box, color_bgr):
@@ -327,6 +255,144 @@ def solid_fill_region(frame, box, color_bgr):
         return
     frame[y:y + h, x:x + w] = color_bgr
 
+def _dashed_line(frame, pt1, pt2, color_bgr, thickness, dash, gap):
+    x1, y1 = pt1
+    x2, y2 = pt2
+    length = max(1, int(round(((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5)))
+    step = dash + gap
+    pos = 0
+    while pos < length:
+        end = min(length, pos + dash)
+        sx = x1 + (x2 - x1) * pos / length
+        sy = y1 + (y2 - y1) * pos / length
+        ex = x1 + (x2 - x1) * end / length
+        ey = y1 + (y2 - y1) * end / length
+        cv2.line(frame, (int(round(sx)), int(round(sy))), (int(round(ex)), int(round(ey))), color_bgr, thickness, cv2.LINE_AA)
+        pos += step
+
+def outline_region(frame, box, color_bgr=(201, 216, 75)):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    thickness, dash, gap = 3, 7, 6
+    _dashed_line(frame, (x, y), (x + w, y), color_bgr, thickness, dash, gap)
+    _dashed_line(frame, (x + w, y), (x + w, y + h), color_bgr, thickness, dash, gap)
+    _dashed_line(frame, (x + w, y + h), (x, y + h), color_bgr, thickness, dash, gap)
+    _dashed_line(frame, (x, y + h), (x, y), color_bgr, thickness, dash, gap)
+
+def glitch_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w].copy()
+    slices = 5
+    slice_h = max(1, round(h / slices))
+    tint_danger = np.array([111, 93, 239], dtype=np.float32)
+    tint_accent = np.array([201, 216, 75], dtype=np.float32)
+    i = 0
+    band_idx = 0
+    while i < h:
+        sh = min(slice_h, h - i)
+        band = roi[i:i + sh]
+        shift = 4 if band_idx % 2 == 0 else -4
+        shifted = np.roll(band, shift, axis=1)
+        tint = tint_danger if band_idx % 2 == 0 else tint_accent
+        tinted = cv2.addWeighted(shifted, 0.82, np.full_like(shifted, tint), 0.18, 0)
+        roi[i:i + sh] = tinted
+        i += sh
+        band_idx += 1
+    frame[y:y + h, x:x + w] = roi
+    cv2.rectangle(frame, (x + 1, y + 1), (x + w - 2, y + h - 2), (255, 255, 255), 1, cv2.LINE_AA)
+
+def rainbow_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w].astype(np.float32)
+
+    stops_rgb = [
+        (255, 77, 109), (247, 208, 63), (74, 217, 255),
+        (124, 107, 255), (132, 255, 124), (255, 77, 109),
+    ]
+    stops_bgr = np.array([[b, g, r] for (r, g, b) in stops_rgb], dtype=np.float32)
+
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    t = np.clip((yy / max(1, h - 1) + xx / max(1, w - 1)) / 2.0, 0, 1)
+
+    n_segments = len(stops_bgr) - 1
+    seg = np.clip((t * n_segments).astype(np.int32), 0, n_segments - 1)
+    local_t = (t * n_segments) - seg
+    c0 = stops_bgr[seg]
+    c1 = stops_bgr[np.clip(seg + 1, 0, n_segments)]
+    gradient = c0 + (c1 - c0) * local_t[..., None]
+
+    g = gradient / 255.0
+    o = roi / 255.0
+    overlaid = np.where(g <= 0.5, 2 * g * o, 1 - 2 * (1 - g) * (1 - o))
+    frame[y:y + h, x:x + w] = np.clip(overlaid * 255.0, 0, 255).astype(np.uint8)
+
+def dots_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    frame[y:y + h, x:x + w] = (26, 27, 18)
+    step = max(7, round(min(w, h) / 10))
+    radius = max(1, int(round(step * 0.22)))
+    color = (201, 216, 75)
+    py = 0
+    while py < h:
+        px = 0
+        while px < w:
+            cx = x + px + int(round(step * 0.45))
+            cy = y + py + int(round(step * 0.45))
+            if cx < x + w and cy < y + h:
+                cv2.circle(frame, (cx, cy), radius, color, -1, cv2.LINE_AA)
+            px += step
+        py += step
+
+def scanline_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    roi = frame[y:y + h, x:x + w].astype(np.float32)
+    base = np.full_like(roi, (39, 40, 17))
+    line = 0
+    while line < h:
+        lh = min(3, h - line)
+        base[line:line + lh] = np.clip(base[line:line + lh] + np.array([41, 55, 19], dtype=np.float32), 0, 255)
+        line += 6
+    screened = 255.0 - (255.0 - base) * (255.0 - roi) / 255.0
+    frame[y:y + h, x:x + w] = np.clip(screened, 0, 255).astype(np.uint8)
+
+def negative_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    frame[y:y + h, x:x + w] = 255 - frame[y:y + h, x:x + w]
+
+def emboss_region(frame, box):
+    x, y, w, h = box
+    height, width = frame.shape[:2]
+    x, y, w, h = clamp_box(x, y, w, h, width, height)
+    if w <= 0 or h <= 0:
+        return
+    frame[y:y + h, x:x + w] = (38, 28, 23)
+    if w > 4 and h > 4:
+        cv2.rectangle(frame, (x + 1, y + 1), (x + w - 2, y + h - 2), (235, 235, 235), 2, cv2.LINE_AA)
+    if w > 8 and h > 8:
+        cv2.rectangle(frame, (x + 3, y + 3), (x + w - 6, y + h - 6), (10, 10, 10), 2, cv2.LINE_AA)
 
 def hex_to_bgr(hex_color):
     hex_color = (hex_color or "#000000").lstrip("#")
@@ -340,10 +406,8 @@ def hex_to_bgr(hex_color):
     except ValueError:
         return (0, 0, 0)
 
-
 def lerp_box(box_a, box_b, t):
     return [a + (b - a) * t for a, b in zip(box_a, box_b)]
-
 
 def match_detections(prev_dets, next_dets):
     pairs = []
@@ -365,7 +429,6 @@ def match_detections(prev_dets, next_dets):
         if j not in used_next:
             pairs.append((nd["class"], None, nd["box"]))
     return pairs
-
 
 def run_ffmpeg_mux(raw_frames_pattern, fps, width, height, src_video_path, out_path):
     probe = subprocess.run(
@@ -392,8 +455,6 @@ def run_ffmpeg_mux(raw_frames_pattern, fps, width, height, src_video_path, out_p
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-# ---------------------------------------------------------------- routes
-
 @app.route("/detect", methods=["POST"])
 def detect():
     if "image" not in request.files:
@@ -410,7 +471,6 @@ def detect():
         for d in detections if d["score"] >= MIN_SCORE
     ]
     return jsonify({"width": int(img.shape[1]), "height": int(img.shape[0]), "all_detections": all_detections})
-
 
 def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style, censor_classes, solid_color_bgr=(0, 0, 0)):
     try:
@@ -493,6 +553,9 @@ def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style
             pairs = match_detections(detections_by_sample[0], [])
             span = 1
 
+        # Normalize the style strings universally to guard against misnamed HTML inputs
+        s = normalize_effect_style(style)
+
         for frame_index in range(total_frames):
             ok, frame = cap.read()
             if not ok or frame is None:
@@ -517,16 +580,38 @@ def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style
                 else:
                     continue
                 total_regions_censored += 1
-                if style == "pixelate":
+                
+                # We use the thoroughly robust 's' comparison check right here!
+                if "pixel" in s:
                     pixelate_region(frame, box)
-                elif style == "frosted":
+                elif "frost" in s:
                     frosted_region(frame, box)
-                elif style == "box":
+                elif s == "smudge":
+                    smudge_region(frame, box)
+                elif s == "cover":
+                    cover_region(frame, box, solid_color_bgr)
+                elif s in ("box", "black-box", "blackbox"):
                     black_box_region(frame, box)
-                elif style == "solid":
+                elif "solid" in s:
                     solid_fill_region(frame, box, solid_color_bgr)
+                elif s in ("soft-blur", "soft"):
+                    blur_region(frame, box, radius=12)
+                elif s == "outline":
+                    outline_region(frame, box)
+                elif s == "glitch":
+                    glitch_region(frame, box)
+                elif s == "rainbow":
+                    rainbow_region(frame, box)
+                elif s == "dots":
+                    dots_region(frame, box)
+                elif s == "scanline":
+                    scanline_region(frame, box)
+                elif s == "negative":
+                    negative_region(frame, box)
+                elif s == "emboss":
+                    emboss_region(frame, box)
                 else:
-                    blur_region(frame, box)
+                    blur_region(frame, box) # Only defaults if utterly unrecognizable
 
             cv2.imwrite(str(frames_dir / f"frame_{frame_index:06d}.png"), frame)
             censored_count += 1
@@ -552,14 +637,17 @@ def process_video_job(job_id, src_path, job_dir, frames_dir, sample_every, style
         traceback.print_exc()
         set_progress(job_id, status="error", error=str(e))
 
-
 @app.route("/start_video_job", methods=["POST"])
 def start_video_job():
     if "video" not in request.files:
         return jsonify({"error": "no video field in form-data"}), 400
 
     sample_every = max(1, int(request.form.get("sample_every", 5)))
-    style = request.form.get("style", "blur")
+    style = normalize_effect_style(
+        request.form.get("style")
+        or request.form.get("censor_style")
+        or request.form.get("style_name")
+    )
     solid_color_bgr = hex_to_bgr(request.form.get("solid_color", "#000000"))
 
     requested_categories = [c.strip() for c in request.form.get("categories", "genitals,breasts").split(",") if c.strip()]
@@ -587,7 +675,6 @@ def start_video_job():
 
     return jsonify({"job_id": job_id})
 
-
 @app.route("/video_progress/<job_id>")
 def video_progress(job_id):
     with JOBS_LOCK:
@@ -601,7 +688,6 @@ def video_progress(job_id):
         "error": job.get("error"),
         "meta": job.get("meta", {}),
     })
-
 
 @app.route("/video_result/<job_id>")
 def video_result(job_id):
@@ -623,20 +709,11 @@ def video_result(job_id):
 
     return response
 
-
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
-
 if __name__ == "__main__":
-    # Bound to localhost only — connect_launcher.py is what makes this
-    # reachable from the browser, via a tunnel it controls and tears down.
-    # (connect_launcher.py calls init_detector() itself, with a GUI prompt to
-    # auto-download the model if it's missing, before ever importing/running
-    # this module. Running app.py directly skips that UI, so just try the
-    # normal search and fail with a clear message rather than a raw
-    # ONNXRuntimeError if nothing's there.)
     try:
         init_detector()
     except FileNotFoundError as e:

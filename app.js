@@ -5,7 +5,6 @@ async function loadConfig() {
     const res = await fetch("config.json", { cache: "no-store" });
     if (res.ok) appConfig = { ...appConfig, ...(await res.json()) };
   } catch (e) {
-
   }
   applyConnectMode();
 }
@@ -72,6 +71,8 @@ window.addEventListener("popstate", render);
 
 function setupDocsNav() {
   const links = document.querySelectorAll("#docsNav a[data-target]");
+  const sections = Array.from(document.querySelectorAll(".doc-section"));
+
   links.forEach(a => {
     a.addEventListener("click", (e) => {
       e.preventDefault();
@@ -81,6 +82,17 @@ function setupDocsNav() {
       a.classList.add("active");
     });
   });
+
+  if (sections.length && "IntersectionObserver" in window) {
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries.filter(entry => entry.isIntersecting).sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      const activeTarget = visible.target.id;
+      links.forEach(link => link.classList.toggle("active", link.dataset.target === activeTarget));
+    }, { rootMargin: "-20% 0px -62% 0px", threshold: [0.2, 0.4, 0.6] });
+
+    sections.forEach(section => observer.observe(section));
+  }
 }
 setupDocsNav();
 
@@ -166,6 +178,7 @@ function onConnected(target) {
   setTimeout(() => {
     gateEl.style.display = "none";
     appEl.style.display = "block";
+    if (typeof syncPreviewHeight === "function") syncPreviewHeight();
   }, 350);
 }
 
@@ -180,7 +193,6 @@ function shortenUrl(url) {
   const last = localStorage.getItem("censor_last_connection");
   if (last) document.getElementById("connectInput").value = last;
 })();
-
 
 const DOWNLOAD_URL = "downloads/CensorSandbox-Setup.exe";
 const downloadAppBtn = document.getElementById("downloadAppBtn");
@@ -218,8 +230,9 @@ const ARMPITS_CLASSES = ["ARMPITS_EXPOSED"];
 function apiUrl(path) { return connection.base + path; }
 
 const fileInput   = document.getElementById("fileInput");
-const dropZone    = document.getElementById("dropZone");
 const dropLabel   = document.getElementById("dropLabel");
+const previewPanel = document.getElementById("previewPanel");
+const previewBrowseBtn = document.getElementById("previewBrowseBtn");
 const analyzeBtn  = document.getElementById("analyzeBtn");
 const analyzeLabel = document.getElementById("analyzeLabel");
 const resetBtn    = document.getElementById("resetBtn");
@@ -230,9 +243,17 @@ const canvas      = document.getElementById("canvas");
 const ctx         = canvas.getContext("2d");
 const videoQueuePanel = document.getElementById("videoQueuePanel");
 const videoQueueList = document.getElementById("videoQueueList");
+const videoQueueBody = document.getElementById("videoQueueBody");
+const toggleQueueBtn = document.getElementById("toggleQueueBtn");
+const tabQueueBtn = document.getElementById("tabQueueBtn");
+const tabSavedBtn = document.getElementById("tabSavedBtn");
+const savedList = document.getElementById("savedList");
+const saveResultBtn = document.getElementById("saveResultBtn");
 const logEmpty    = document.getElementById("logEmpty");
 const logList     = document.getElementById("logList");
 const logCount    = document.getElementById("logCount");
+const logCardBody  = document.getElementById("logCardBody");
+const toggleAdvancedBtn = document.getElementById("toggleAdvancedBtn");
 const showAllToggle  = document.getElementById("showAllToggle");
 const showAllWrap = document.getElementById("showAllWrap");
 const preBlurToggle = document.getElementById("preBlurToggle");
@@ -265,31 +286,49 @@ sampleEvery.addEventListener("input", () => {
   sampleValueLabel.textContent = sampleEvery.value === "1" ? "every frame" : `every ${sampleEvery.value} frames`;
 });
 
-["dragover", "drop"].forEach(evt => window.addEventListener(evt, (e) => e.preventDefault()));
-["dragenter", "dragover"].forEach(evt => dropZone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add("drag"); }));
-["dragleave", "dragend"].forEach(evt => dropZone.addEventListener(evt, (e) => { e.preventDefault(); dropZone.classList.remove("drag"); }));
+function setDropState(active) {
+  previewPanel.classList.toggle("drag", active);
+}
 
-dropZone.addEventListener("drop", (e) => {
-  e.preventDefault(); e.stopPropagation();
-  dropZone.classList.remove("drag");
-  const dt = e.dataTransfer;
+function collectDroppedFiles(event) {
+  const dt = event.dataTransfer;
   let files = [];
   if (dt.files && dt.files.length) files = Array.from(dt.files);
   else if (dt.items && dt.items.length) for (const item of dt.items) { if (item.kind === "file") { const f = item.getAsFile(); if (f) files.push(f); } }
+  return files;
+}
+
+["dragover", "drop"].forEach(evt => window.addEventListener(evt, (e) => e.preventDefault()));
+["dragenter", "dragover"].forEach(evt => previewPanel.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); setDropState(true); }));
+["dragleave", "dragend"].forEach(evt => previewPanel.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); setDropState(false); }));
+
+previewPanel.addEventListener("drop", (e) => {
+  e.preventDefault(); e.stopPropagation();
+  setDropState(false);
+  const files = collectDroppedFiles(e);
   if (!files.length) { setStatus("That drop didn't contain an actual file. Try dragging from your file explorer, or click to choose instead.", "error"); return; }
   loadFiles(files);
 });
 
+previewBrowseBtn.addEventListener("click", (e) => { e.stopPropagation(); fileInput.click(); });
+previewPanel.addEventListener("click", (e) => {
+  if (e.target.closest(".preview-toolbar") || e.target.closest(".btn")) return;
+  if (!currentFile && !currentImage && !previewVideo.dataset.currentUrl) fileInput.click();
+});
 fileInput.addEventListener("change", (e) => { if (e.target.files.length) loadFiles(Array.from(e.target.files)); fileInput.value = ""; });
+
+previewVideo.addEventListener('loadeddata', () => updateSaveAvailability());
+previewVideo.addEventListener('emptied', () => updateSaveAvailability());
 
 function showImageUI() {
   mode = "image";
   hideVideoPreview();
-  canvasWrap.style.display = "block";
+  canvasWrap.style.display = "flex"; 
   canvasPlaceholder.style.display = "none";
   showAllWrap.style.display = "flex";
   logCard.style.display = "block";
 }
+
 const logCard = document.getElementById("logCard");
 
 const frameModalOverlay = document.getElementById("frameModalOverlay");
@@ -401,9 +440,19 @@ function loadImageFile(file) {
 function drawImageOnly(img) {
   canvas.width = img.width;
   canvas.height = img.height;
+
+  canvas.style.maxWidth = "100%";
+  canvas.style.maxHeight = "100%";
+  canvas.style.objectFit = "contain";
+
+  canvasWrap.style.height = "100%";
+  canvasWrap.style.display = "flex";
+  canvasWrap.style.alignItems = "center";
+  canvasWrap.style.justifyContent = "center";
+  canvasWrap.style.overflow = "hidden";
+
   ctx.drawImage(img, 0, 0);
   canvasPlaceholder.style.display = "none";
-  canvasWrap.style.display = "block";
 }
 
 function applyPreBlurState() {
@@ -482,6 +531,7 @@ async function analyzeImage() {
     lastResult = data;
     renderResult(data);
     setResultActionsEnabled(true);
+    updateSaveAvailability();
   } catch (err) {
     setStatus("Error: " + err.message + " — is your sandbox still paired?", "error");
   } finally {
@@ -503,13 +553,14 @@ let jobCounter = 0;
 
 async function addVideoJob(file) {
   const localId = "job" + (++jobCounter);
-  const style = document.querySelector('input[name="style"]:checked').value;
-  const solidColor = solidColorInput.value;
   const defaultSample = sampleEvery.value;
 
   const answer = await askFrameRate(file.name, defaultSample);
   if (answer === null) { setStatus(`Skipped "${file.name}" — cancelled.`, "info"); return; }
   const sampleEveryVal = answer;
+
+  const style = currentStyle();
+  const solidColor = solidColorInput.value;
   const categories = collectCategories().join(",");
 
   videoQueuePanel.style.display = "block";
@@ -566,7 +617,11 @@ async function runVideoJob(file, style, sampleEveryVal, categories, els, localId
   const formData = new FormData();
   formData.append("video", file);
   formData.append("sample_every", sampleEveryVal);
+  
   formData.append("style", style);
+  formData.append("censor_style", style);
+  formData.append("style_name", style.replace("-", "_"));
+  
   formData.append("categories", categories);
   formData.append("solid_color", solidColor || "#000000");
 
@@ -597,11 +652,119 @@ async function runVideoJob(file, style, sampleEveryVal, categories, els, localId
 
     const job = { localId, name: file.name, url, cardEl };
     els.changeBtn.addEventListener("click", () => selectVideoJob(job));
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "btn btn-ghost";
+    saveBtn.style.padding = "8px";
+    saveBtn.textContent = "Save";
+    saveBtn.addEventListener("click", async () => {
+      try {
+        const res = await fetch(url);
+        const b = await res.blob();
+        await saveBlobToCache(b, file.name);
+        setStatus(`Saved "${file.name}" to Saved items.`, "ok");
+        updateSavedList();
+      } catch (e) { setStatus("Save failed: " + e.message, "error"); }
+    });
+    cardEl.appendChild(saveBtn);
   } catch (err) {
     els.label.textContent = "Failed";
     els.errorMsg.textContent = err.message + " — is your sandbox still paired?";
     els.errorMsg.style.display = "block";
   }
+}
+
+async function saveBlobToCache(blob, filename) {
+  try {
+    const cache = await caches.open('censor-saved');
+    const id = Date.now() + '-' + (filename || 'item');
+    const req = new Request('https://censor.local/saved/' + id);
+    const headers = new Headers({ 'Content-Type': blob.type, 'X-Filename': filename });
+    const resp = new Response(blob, { headers });
+    await cache.put(req, resp);
+    return id;
+  } catch (e) { throw e; }
+}
+
+async function updateSavedList() {
+  try {
+    savedList.innerHTML = '';
+    const cache = await caches.open('censor-saved');
+    const keys = await cache.keys();
+    if (!keys.length) {
+      savedList.innerHTML = '<div class="step-fine">No saved items yet.</div>';
+      return;
+    }
+    for (const req of keys.reverse()) {
+      const res = await cache.match(req);
+      if (!res) continue;
+      const blob = await res.blob();
+      const fname = res.headers.get('X-Filename') || req.url.split('/').pop();
+      const url = URL.createObjectURL(blob);
+      const item = document.createElement('div');
+      item.className = 'queue-card';
+      item.style.display = 'flex';
+      item.style.gap = '8px';
+      item.style.alignItems = 'center';
+      item.innerHTML = `<div style="flex:1; min-width:0"><div style="font-weight:600;">${fname}</div></div>`;
+      const loadBtn = document.createElement('button'); loadBtn.className = 'btn btn-ghost'; loadBtn.textContent = 'Open';
+      loadBtn.addEventListener('click', () => {
+        if (blob.type.startsWith('image/')) {
+          loadSavedImage(blob, fname);
+        } else if (blob.type.startsWith('video/')) {
+          const job = { localId: 'saved-'+Date.now(), name: fname, url };
+          selectVideoJob(job);
+        }
+      });
+      const dlBtn = document.createElement('button'); dlBtn.className = 'btn btn-ghost'; dlBtn.textContent = 'Download';
+      dlBtn.addEventListener('click', () => {
+        const a = document.createElement('a'); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+      });
+      const delBtn = document.createElement('button'); delBtn.className = 'btn btn-ghost'; delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => { await cache.delete(req); updateSavedList(); });
+      item.appendChild(loadBtn); item.appendChild(dlBtn); item.appendChild(delBtn);
+      savedList.appendChild(item);
+    }
+  } catch (e) { console.error(e); }
+}
+
+function loadSavedImage(blob, filename) {
+  const img = new Image();
+  img.onload = () => {
+    currentImage = img; currentFile = null; lastResult = null; showImageUI(); drawImageOnly(img); setResultActionsEnabled(true); setStatus(`Opened saved image ${filename}`, 'ok');
+    updateSaveAvailability();
+  };
+  img.src = URL.createObjectURL(blob);
+}
+
+if (toggleQueueBtn) toggleQueueBtn.addEventListener('click', () => {
+  const collapsed = videoQueueBody.style.display === 'none';
+  videoQueueBody.style.display = collapsed ? 'flex' : 'none';
+  toggleQueueBtn.textContent = collapsed ? '▾' : '▸';
+});
+if (tabQueueBtn && tabSavedBtn) {
+  tabQueueBtn.addEventListener('click', () => { videoQueueList.style.display = ''; savedList.style.display = 'none'; });
+  tabSavedBtn.addEventListener('click', () => { videoQueueList.style.display = 'none'; savedList.style.display = ''; updateSavedList(); });
+}
+
+if (saveResultBtn) {
+  saveResultBtn.addEventListener('click', async () => {
+    try {
+      if (mode === 'image' && canvas) {
+        canvas.toBlob(async (blob) => { if (!blob) return; const name = (currentFile && currentFile.name) ? currentFile.name.replace(/\.[^.]+$/, '') + '-censored.png' : 'censored.png'; await saveBlobToCache(blob, name); setStatus('Saved image to Saved items.', 'ok'); updateSavedList(); });
+      } else if (mode === 'video' && previewVideo && previewVideo.dataset.currentUrl) {
+        const res = await fetch(previewVideo.dataset.currentUrl || previewVideo.src);
+        const b = await res.blob();
+        await saveBlobToCache(b, previewVideoLabel.textContent || 'video.mp4');
+        setStatus('Saved video to Saved items.', 'ok'); updateSavedList();
+      }
+    } catch (e) { setStatus('Save failed: ' + e.message, 'error'); }
+  });
+}
+
+function updateSaveAvailability() {
+  if (!saveResultBtn) return;
+  saveResultBtn.disabled = !( (mode === 'image' && lastResult) || (mode === 'video' && previewVideo && (previewVideo.dataset.currentUrl || previewVideo.src)) );
 }
 
 function hideVideoPreview() { videoWrap.style.display = "none"; previewVideo.pause(); }
@@ -613,7 +776,16 @@ function selectVideoJob(job) {
   showAllWrap.style.display = "none";
   logCard.style.display = "none";
   setResultActionsEnabled(false);
+  
   videoWrap.style.display = "flex";
+  videoWrap.style.alignItems = "center";
+  videoWrap.style.justifyContent = "center";
+  videoWrap.style.overflow = "hidden";
+  
+  previewVideo.style.maxWidth = "100%";
+  previewVideo.style.maxHeight = "100%";
+  previewVideo.style.objectFit = "contain";
+  
   previewVideoLabel.textContent = job.name;
   if (previewVideo.dataset.currentUrl !== job.url) {
     previewVideo.pause(); previewVideo.autoplay = false;
@@ -621,6 +793,7 @@ function selectVideoJob(job) {
   }
   document.querySelectorAll('#videoQueueList [data-local-id]').forEach(el => el.style.outline = el.dataset.localId === job.localId ? `2px solid var(--accent)` : "none");
   setStatus(`Showing "${job.name}" in the preview.`, "ok");
+  updateSaveAvailability();
 }
 
 function activeClasses() {
@@ -635,16 +808,37 @@ function activeClasses() {
   return classes;
 }
 
-function currentStyle() { return document.querySelector('input[name="style"]:checked').value; }
+function currentStyle() { 
+  const el = document.querySelector('input[name="style"]:checked');
+  return el ? el.value : "blur"; 
+}
 
-function applyStyleToRegion(style, box) {
-  switch (style) {
-    case "pixelate": pixelateRegion(box); break;
-    case "frosted": frostedRegion(box); break;
-    case "box": blackBoxRegion(box); break;
-    case "solid": solidFillRegion(box, solidColorInput.value); break;
-    default: blurRegion(box);
-  }
+function updateSwatchSelection() {
+  styleRadios.forEach(radio => {
+    const swatch = radio.closest(".swatch");
+    if (swatch) swatch.classList.toggle("is-selected", radio.checked);
+  });
+}
+
+function applyStyleToRegion(rawStyle, box) {
+  const s = (rawStyle || "").toLowerCase().trim().replace(/_/g, "-");
+  
+  if (s.includes("pixel")) return pixelateRegion(box);
+  if (s.includes("frost")) return frostedRegion(box);
+  if (s === "smudge") return smudgeRegion(box, solidColorInput.value);
+  if (s === "cover") return coverRegion(box, solidColorInput.value);
+  if (s === "box" || s === "black-box" || s === "blackbox") return blackBoxRegion(box);
+  if (s.includes("solid")) return solidFillRegion(box, solidColorInput.value);
+  if (s === "outline") return outlineRegion(box);
+  if (s === "glitch") return glitchRegion(box);
+  if (s === "rainbow") return rainbowRegion(box);
+  if (s === "dots") return dotsRegion(box);
+  if (s === "scanline") return scanlineRegion(box);
+  if (s === "negative") return negativeRegion(box);
+  if (s === "emboss") return embossRegion(box);
+  if (s === "soft-blur" || s === "soft") return blurRegion(box, 12);
+  
+  return blurRegion(box);
 }
 
 function renderResult(data) {
@@ -706,6 +900,151 @@ function frostedRegion(box) {
   ctx.restore();
 }
 
+function smudgeRegion(box, color) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  const off = document.createElement("canvas");
+  off.width = w; off.height = h;
+  const offCtx = off.getContext("2d");
+  offCtx.filter = "blur(2px)";
+  offCtx.drawImage(currentImage, x, y, w, h, 0, 0, w, h);
+  offCtx.filter = "none";
+  ctx.clearRect(x, y, w, h);
+  ctx.drawImage(off, 0, 0, w, h, x, y, w, h);
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = color || "#0b0d14";
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+}
+
+function coverRegion(box, color) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.fillStyle = color || "#0b0d14";
+  ctx.globalAlpha = 0.82;
+  ctx.fillRect(x, y, w, h);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  ctx.restore();
+}
+
+function outlineRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.strokeStyle = "rgba(75, 216, 201, 0.95)";
+  ctx.lineWidth = 3;
+  ctx.setLineDash([7, 6]);
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+
+function glitchRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  const slices = 5;
+  for (let i = 0; i < slices; i++) {
+    const sliceHeight = Math.max(4, Math.round(h / slices));
+    const sy = y + i * sliceHeight;
+    const dy = sy + (i % 2 === 0 ? 2 : -2);
+    const sw = w;
+    const sh = Math.min(sliceHeight, y + h - sy);
+    const off = document.createElement('canvas');
+    off.width = sw;
+    off.height = sh;
+    const offCtx = off.getContext('2d');
+    offCtx.drawImage(currentImage, x, sy, sw, sh, 0, 0, sw, sh);
+    offCtx.globalCompositeOperation = 'source-atop';
+    offCtx.fillStyle = i % 2 === 0 ? 'rgba(239,93,111,0.18)' : 'rgba(75,216,201,0.18)';
+    offCtx.fillRect(0, 0, sw, sh);
+    ctx.drawImage(off, x + (i % 2 === 0 ? 4 : -4), dy, sw, sh);
+  }
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.restore();
+}
+
+function rainbowRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  const grd = ctx.createLinearGradient(x, y, x + w, y + h);
+  grd.addColorStop(0, '#ff4d6d');
+  grd.addColorStop(0.2, '#f7d03f');
+  grd.addColorStop(0.4, '#4ad9ff');
+  grd.addColorStop(0.6, '#7c6bff');
+  grd.addColorStop(0.8, '#84ff7c');
+  grd.addColorStop(1, '#ff4d6d');
+  ctx.save();
+  ctx.fillStyle = grd;
+  ctx.fillRect(x, y, w, h);
+  ctx.globalCompositeOperation = 'overlay';
+  ctx.drawImage(currentImage, x, y, w, h, x, y, w, h);
+  ctx.restore();
+}
+
+function dotsRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.fillStyle = '#121b2a';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(75,216,201,0.82)';
+  const step = Math.max(7, Math.round(Math.min(w, h) / 10));
+  for (let py = y; py < y + h; py += step) {
+    for (let px = x; px < x + w; px += step) {
+      ctx.beginPath();
+      ctx.arc(px + step * 0.45, py + step * 0.45, step * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+function scanlineRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.fillStyle = '#111827';
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(75,216,201,0.16)';
+  for (let line = y; line < y + h; line += 6) {
+    ctx.fillRect(x, line, w, 3);
+  }
+  ctx.globalCompositeOperation = 'screen';
+  ctx.drawImage(currentImage, x, y, w, h, x, y, w, h);
+  ctx.restore();
+}
+
+function negativeRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  const offCtx = off.getContext('2d');
+  offCtx.drawImage(currentImage, x, y, w, h, 0, 0, w, h);
+  const imgData = offCtx.getImageData(0, 0, w, h);
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = 255 - d[i];
+    d[i+1] = 255 - d[i+1];
+    d[i+2] = 255 - d[i+2];
+  }
+  offCtx.putImageData(imgData, 0, 0);
+  ctx.drawImage(off, x, y);
+}
+
+function embossRegion(box) {
+  const [x, y, w, h] = clampBox(box); if (w <= 0 || h <= 0) return;
+  ctx.save();
+  ctx.fillStyle = '#171c26';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.24)';
+  ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+  ctx.restore();
+}
+
 function drawBoxOutline([x, y, w, h], label, censored) {
   ctx.save();
   ctx.strokeStyle = censored ? "#ef5d6f" : "#4bd8c9";
@@ -732,6 +1071,9 @@ function populateLog(data, boxesToCensor) {
   data.all_detections.forEach(det => {
     const isCensored = boxesToCensor.includes(det);
     const [x, y, w, h] = det.box;
+    const centerX = Math.round(x + w / 2);
+    const centerY = Math.round(y + h / 2);
+    const area = Math.round(w * h);
     const row = document.createElement("div");
     row.className = "log-row";
     row.innerHTML = `
@@ -740,29 +1082,47 @@ function populateLog(data, boxesToCensor) {
         <span class="lr-score">${(det.score * 100).toFixed(1)}%</span>
       </div>
       <div class="log-coords">
-        <div>x ${Math.round(x)}px</div><div>y ${Math.round(y)}px</div>
-        <div>w ${Math.round(w)}px</div><div>h ${Math.round(h)}px</div>
+        <div class="coord-pill"><span>x</span><span>${Math.round(x)}px</span></div>
+        <div class="coord-pill"><span>y</span><span>${Math.round(y)}px</span></div>
+        <div class="coord-pill"><span>center</span><span>${centerX}, ${centerY}</span></div>
+        <div class="coord-pill"><span>size</span><span>${Math.round(w)}×${Math.round(h)}</span></div>
       </div>
-      <span class="tag ${isCensored ? 'censored' : 'ignored'}">${isCensored ? 'censored' : 'ignored'}</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+        <span class="step-fine" style="margin:0">Area ${area}px</span>
+        <span class="tag ${isCensored ? 'censored' : 'ignored'}">${isCensored ? 'censored' : 'ignored'}</span>
+      </div>
     `;
     logList.appendChild(row);
   });
 }
 
+if (toggleAdvancedBtn) {
+  toggleAdvancedBtn.addEventListener('click', () => {
+    const open = logCardBody.style.display !== 'none';
+    logCardBody.style.display = open ? 'none' : 'block';
+    toggleAdvancedBtn.textContent = open ? 'Advanced' : 'Hide';
+  });
+}
+
 function updateSolidColorVisibility() {
-  solidColorWrap.style.display = currentStyle() === "solid" ? "flex" : "none";
+  const style = (currentStyle() || "").toLowerCase();
+  const usesColor = style.includes("solid") || style === "cover" || style === "smudge";
+  solidColorWrap.style.display = usesColor ? "flex" : "none";
 }
 
 showAllToggle.addEventListener("change", () => { if (lastResult && mode === "image") renderResult(lastResult); });
 [censorGenitals, censorBreasts, censorButtocks, censorFeet, censorFace, censorBelly, censorArmpits].forEach(cb => cb.addEventListener("change", () => { if (lastResult && mode === "image") renderResult(lastResult); }));
 styleRadios.forEach(r => r.addEventListener("change", () => {
+  updateSwatchSelection();
   updateSolidColorVisibility();
   if (lastResult && mode === "image") renderResult(lastResult);
 }));
 solidColorInput.addEventListener("input", () => {
   solidSwatchPreview.style.background = solidColorInput.value;
-  if (lastResult && mode === "image" && currentStyle() === "solid") renderResult(lastResult);
+  const style = (currentStyle() || "").toLowerCase();
+  if (lastResult && mode === "image" && (style.includes("solid") || style === "cover" || style === "smudge")) renderResult(lastResult);
 });
+updateSwatchSelection();
 updateSolidColorVisibility();
 solidSwatchPreview.style.background = solidColorInput.value;
 
@@ -792,34 +1152,88 @@ copyResultBtn.addEventListener("click", () => {
   }, "image/png");
 });
 
-const previewPanel = document.getElementById("previewPanel");
 const fullscreenBtn = document.getElementById("fullscreenBtn");
 const focusBtn = document.getElementById("focusBtn");
 const focusBackBtn = document.getElementById("focusBackBtn");
-let focusActive = false;
+const previewMuteBtn = document.getElementById("previewMuteBtn");
+let previewMode = null;
 
-function applyExpandedStyle(active) {
-  previewPanel.style.position = active ? "fixed" : "";
-  previewPanel.style.inset = active ? "0" : "";
-  previewPanel.style.zIndex = active ? "50" : "";
-  previewPanel.style.borderRadius = active ? "0" : "";
-  document.body.style.overflow = active ? "hidden" : "";
+function setPreviewMode(mode) {
+  previewMode = mode;
+  previewPanel.classList.toggle("preview-expanded", mode === "theater" || mode === "fullscreen");
+  previewPanel.classList.toggle("preview-theater", mode === "theater");
+  previewPanel.classList.toggle("preview-fullscreen", mode === "fullscreen");
+  document.body.classList.toggle("preview-mode-active", !!mode);
+  document.body.style.overflow = mode ? "hidden" : "";
+  focusBackBtn.style.display = mode === "theater" ? "flex" : "none";
 }
 
-fullscreenBtn.addEventListener("click", () => {
-  if (!document.fullscreenElement) previewPanel.requestFullscreen?.().catch(err => setStatus("Fullscreen failed: " + err.message, "error"));
-  else document.exitFullscreen?.();
-});
+function enterTheaterMode() {
+  if (document.fullscreenElement === previewPanel) document.exitFullscreen?.();
+  setPreviewMode("theater");
+}
+
+function exitPreviewMode() {
+  if (document.fullscreenElement === previewPanel) {
+    document.exitFullscreen?.();
+  }
+  setPreviewMode(null);
+}
+
+function toggleTheaterMode() {
+  if (previewMode === "theater") exitPreviewMode();
+  else enterTheaterMode();
+}
+
+function toggleFullscreenMode() {
+  if (document.fullscreenElement === previewPanel) {
+    document.exitFullscreen?.();
+    setPreviewMode(null);
+    return;
+  }
+  setPreviewMode("fullscreen");
+  previewPanel.requestFullscreen?.().catch(err => setStatus("Fullscreen failed: " + err.message, "error"));
+}
+
+fullscreenBtn.addEventListener("click", toggleFullscreenMode);
 document.addEventListener("fullscreenchange", () => {
-  const isFs = document.fullscreenElement === previewPanel;
-  applyExpandedStyle(isFs);
-  if (isFs) { focusActive = false; focusBackBtn.style.display = "none"; }
+  if (document.fullscreenElement === previewPanel) {
+    setPreviewMode("fullscreen");
+  } else if (previewMode === "fullscreen") {
+    setPreviewMode(null);
+  }
 });
-function enterFocus() { focusActive = true; applyExpandedStyle(true); focusBackBtn.style.display = "flex"; }
-function exitFocus() { focusActive = false; applyExpandedStyle(false); focusBackBtn.style.display = "none"; }
-focusBtn.addEventListener("click", () => { if (document.fullscreenElement) { document.exitFullscreen?.(); return; } focusActive ? exitFocus() : enterFocus(); });
-focusBackBtn.addEventListener("click", exitFocus);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && focusActive) exitFocus(); });
+focusBtn.addEventListener("click", toggleTheaterMode);
+focusBackBtn.addEventListener("click", exitPreviewMode);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (document.fullscreenElement === previewPanel) {
+      document.exitFullscreen?.();
+    } else if (previewMode === "theater") {
+      exitPreviewMode();
+    }
+  }
+});
+
+if (previewMuteBtn) {
+  const syncPreviewMuteUI = () => {
+    const muted = previewVideo.muted;
+    previewMuteBtn.title = muted ? "Unmute preview" : "Mute preview";
+    previewMuteBtn.innerHTML = muted
+      ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a4 4 0 0 1 0 6"/><path d="M18 7a7 7 0 0 1 0 10"/></svg>'
+      : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15 9a4 4 0 0 1 0 6"/><path d="M18 7a7 7 0 0 1 0 10"/><path d="m5 5 14 14"/></svg>';
+  };
+  previewMuteBtn.addEventListener("click", () => {
+    previewVideo.muted = !previewVideo.muted;
+    previewVideo.volume = previewVideo.muted ? 0 : 1;
+    syncPreviewMuteUI();
+  });
+  previewVideo.addEventListener("volumechange", syncPreviewMuteUI);
+  previewVideo.muted = true;
+  previewVideo.defaultMuted = true;
+  previewVideo.volume = 0;
+  syncPreviewMuteUI();
+}
 
 resetBtn.addEventListener("click", () => {
   currentImage = null; currentFile = null; lastResult = null; mode = null;
@@ -833,6 +1247,38 @@ resetBtn.addEventListener("click", () => {
   setResultActionsEnabled(false);
   setStatus("", "");
   clearLog();
+  updateSaveAvailability();
 });
+
+function syncPreviewHeight() {
+  const optionsPanel = document.querySelector(".left-stack .panel");
+  if (!optionsPanel || !previewPanel) return;
+
+  if (window.innerWidth <= 980) {
+    previewPanel.style.height = "";
+    previewPanel.style.maxHeight = ""; 
+    return;
+  }
+
+  const targetHeight = optionsPanel.getBoundingClientRect().height;
+  if (targetHeight > 0) {
+    previewPanel.style.height = targetHeight + "px";
+    previewPanel.style.maxHeight = targetHeight + "px"; 
+  }
+}
+
+window.addEventListener("resize", syncPreviewHeight);
+window.addEventListener("load", syncPreviewHeight);
+syncPreviewHeight();
+
+if ("ResizeObserver" in window) {
+  const previewHeightObserver = new ResizeObserver(() => syncPreviewHeight());
+  if (appEl) previewHeightObserver.observe(appEl);
+  const optionsPanelEl = document.querySelector(".left-stack .panel");
+  if (optionsPanelEl) previewHeightObserver.observe(optionsPanelEl);
+} else {
+  setTimeout(syncPreviewHeight, 400);
+  setTimeout(syncPreviewHeight, 1200);
+}
 
 loadConfig().then(render);
